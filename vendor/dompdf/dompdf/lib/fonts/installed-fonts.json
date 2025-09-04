@@ -1,0 +1,17 @@
+{
+    "dm serif display": {
+        "italic": "\/home\/hkota_srv_admin\/public_html\/wp-content\/plugins\/hkota-courses-and-memberships\/vendor\/dompdf\/dompdf\/lib\/fonts\/dm_serif_display_italic_96d0fd5ae335fb4e0412b3a188f83d5d",
+        "normal": "dm_serif_display_normal_f939e9ba5c4b183d7ec682fad59896c8"
+    },
+    "noto sans tc": {
+        "100": "\/home\/hkota_srv_admin\/public_html\/wp-content\/plugins\/hkota-courses-and-memberships\/vendor\/dompdf\/dompdf\/lib\/fonts\/noto_sans_tc_100_f4890a9428594fc5b9a076c954a13366",
+        "200": "\/home\/hkota_srv_admin\/public_html\/wp-content\/plugins\/hkota-courses-and-memberships\/vendor\/dompdf\/dompdf\/lib\/fonts\/noto_sans_tc_200_2a2e68b0a5085760308b1049e8e4fb4e",
+        "300": "\/home\/hkota_srv_admin\/public_html\/wp-content\/plugins\/hkota-courses-and-memberships\/vendor\/dompdf\/dompdf\/lib\/fonts\/noto_sans_tc_300_06d9ad3ebaec2bfa644dc41804b78571",
+        "normal": "\/home\/hkota_srv_admin\/public_html\/wp-content\/plugins\/hkota-courses-and-memberships\/vendor\/dompdf\/dompdf\/lib\/fonts\/noto_sans_tc_normal_3931d8f2ec734beedacf8627aac63492",
+        "500": "\/home\/hkota_srv_admin\/public_html\/wp-content\/plugins\/hkota-courses-and-memberships\/vendor\/dompdf\/dompdf\/lib\/fonts\/noto_sans_tc_500_8ce306905e33d1f18b2393e1208f0024",
+        "600": "\/home\/hkota_srv_admin\/public_html\/wp-content\/plugins\/hkota-courses-and-memberships\/vendor\/dompdf\/dompdf\/lib\/fonts\/noto_sans_tc_600_83405a7a09b50271511a880992f37951",
+        "bold": "\/home\/hkota_srv_admin\/public_html\/wp-content\/plugins\/hkota-courses-and-memberships\/vendor\/dompdf\/dompdf\/lib\/fonts\/noto_sans_tc_bold_12628b9787d9d26f7c1406d0f0acbfc9",
+        "800": "\/home\/hkota_srv_admin\/public_html\/wp-content\/plugins\/hkota-courses-and-memberships\/vendor\/dompdf\/dompdf\/lib\/fonts\/noto_sans_tc_800_05b85fa1228337264ce666095ff2534e",
+        "900": "noto_sans_tc_900_ab06fb57ec852c63e3ba8d5167979549"
+    }
+}

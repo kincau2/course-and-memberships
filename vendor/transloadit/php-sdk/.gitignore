@@ -1,0 +1,8 @@
+/Readme.html
+
+composer.phar
+build/
+vendor/
+bin/composer
+env.sh
+.phpunit.cache
