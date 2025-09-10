@@ -475,7 +475,7 @@ input.date-filter {
 }
 
 .cpd-table tr:nth-child(2n + 1){
-  background-color: ##00808012 !important;
+  background-color: #00808012 !important;
 }
 
 .cpd-table .date-issued{

@@ -520,19 +520,6 @@ jQuery(document).ready(function (e) {
     jQuery(document).on('click', '#new-membership-button', function(e) {
         e.preventDefault();
 
-        const today = new Date();
-        const currentYear = today.getFullYear();
-
-        // Set the cutoff date as April 30th of the current year
-        const april30th = new Date(currentYear, 3, 30); // Month is 0-based, so 3 is April
-
-        // Calculate next year and second next year
-        const previousYear = currentYear - 1;
-        const nextYear = currentYear + 1;
-
-        // Generate the strings
-        const thisPeriod = `${previousYear}-${currentYear}`;
-        const nextPeriod = `${currentYear}-${nextYear}`;
         var button = jQuery(this);
         button.append(' <i style="margin-left:5px;" class="fa fa-spinner fa-spin"></i>').prop('disabled', true);
         // Send AJAX request to fetch available membership plans
@@ -558,22 +545,18 @@ jQuery(document).ready(function (e) {
                         <div>
                             <label for="membership-plan-select">Choose a Membership Plan:</label>
                             <select id="membership-plan-select">${planOptions}</select>
+                        </div>
+                        <div id="tenure-selection"></div>
+                        <div id="period-selection" style="display:none;">
                             <label for="membership-plan-period">Choose Membership Starting Years:</label>
                             <select id="membership-plan-period">
                             </select>
                         </div>
-                        <div id="tenure-selection"></div>
+                        <div id="confirm-section" style="display:none;">
+                            <button id="add-membership-to-cart" class="button">Confirm</button>
+                        </div>
                     `);
-                    if( today < april30th ){
-                      jQuery('#membership-plan-period').html(`
-                        <option value="${currentYear}">May ${thisPeriod}</option>
-                        <option value="${nextYear}">Apr ${nextPeriod}</option>
-                      `);
-                    } else {
-                      jQuery('#membership-plan-period').html(`
-                        <option value="${nextYear}">${nextPeriod}</option>
-                      `);
-                    }
+                    
                     button.find('i.fa-spinner').remove();
                     button.prop('disabled', false);
                 } else {
@@ -608,7 +591,7 @@ jQuery(document).ready(function (e) {
 
                 // Build the tenure options based on the selected membership plan
                 selectedPlan.tenures.forEach(function(tenure) {
-                    tenureOptions += `<option value="${tenure.Years}">${tenure.Years} Year(s) - New Fee: ${tenure.new}`;
+                    tenureOptions += `<option value="${tenure.Years}">${tenure.Years} Year(s) - New Fee: ${tenure.new}</option>`;
                 });
 
                 // Display tenure selection
@@ -617,11 +600,84 @@ jQuery(document).ready(function (e) {
                         <label for="tenure-select">Choose Tenure:</label>
                         <select id="tenure-select">${tenureOptions}</select>
                     </div>
-                    <button data-membership-id="${selectedPlan.id}" id="add-membership-to-cart" class="button">Confirm</button>
-                `);
+                `).show();
+                
+                // Hide period selection and confirm button until tenure is selected
+                jQuery('#period-selection').hide();
+                jQuery('#confirm-section').hide();
             }
+        } else {
+            // Hide all subsequent sections if no plan is selected
+            jQuery('#tenure-selection').hide();
+            jQuery('#period-selection').hide();
+            jQuery('#confirm-section').hide();
         }
     });
+
+    // Handle tenure selection and show membership period options
+    jQuery(document).on('change', '#tenure-select', function() {
+        let selectedYears = parseInt(jQuery(this).val());
+        let selectedPlanId = jQuery('#membership-plan-select').val();
+
+        if (selectedYears && selectedPlanId) {
+            // Update the period selection label and options based on selected tenure
+            updateMembershipPeriodDisplay(selectedYears);
+            
+            // Show period selection and confirm button
+            jQuery('#period-selection').show();
+            jQuery('#confirm-section').show();
+            
+            // Store the membership plan ID for the confirm button
+            jQuery('#add-membership-to-cart').attr('data-membership-id', selectedPlanId);
+        } else {
+            jQuery('#period-selection').hide();
+            jQuery('#confirm-section').hide();
+        }
+    });
+
+    // Function to update membership period display
+    function updateMembershipPeriodDisplay(selectedYears) {
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const april30th = new Date(currentYear, 3, 30);
+        
+        let periodOptions = '';
+        let periodLabel = 'Choose Membership Starting Years:';
+        
+        if (today < april30th) {
+            // Before April 30th - can buy current or next period
+            
+            // Current period option
+            const currentStartYear = currentYear - 1;
+            const currentEndYear = currentStartYear + selectedYears;
+            const currentStartDate = `${currentStartYear}-05-01`;
+            const currentEndDate = `${currentEndYear}-04-30`;
+            
+            // Next period option  
+            const nextStartYear = currentYear;
+            const nextEndYear = nextStartYear + selectedYears;
+            const nextStartDate = `${nextStartYear}-05-01`;
+            const nextEndDate = `${nextEndYear}-04-30`;
+            
+            periodOptions = `
+                <option value="${currentYear}">${currentStartDate} - ${currentEndDate} (${selectedYears} year${selectedYears > 1 ? 's' : ''})</option>
+                <option value="${currentYear + 1}">${nextStartDate} - ${nextEndDate} (${selectedYears} year${selectedYears > 1 ? 's' : ''})</option>
+            `;
+        } else {
+            // After April 30th - can only buy next period
+            const nextStartYear = currentYear;
+            const nextEndYear = nextStartYear + selectedYears;
+            const nextStartDate = `${nextStartYear}-05-01`;
+            const nextEndDate = `${nextEndYear}-04-30`;
+            
+            periodOptions = `
+                <option value="${currentYear + 1}">${nextStartDate} - ${nextEndDate} (${selectedYears} year${selectedYears > 1 ? 's' : ''})</option>
+            `;
+        }
+        
+        jQuery('#membership-plan-period').html(periodOptions);
+        jQuery('#period-selection label').text(periodLabel);
+    }
 
     // Handle renewal confirmation
     jQuery(document).on('click', '#add-membership-to-cart', function() {
