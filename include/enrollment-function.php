@@ -390,7 +390,7 @@ function order_on_hold_register_pupil_to_course($order_id, $old_status, $new_sta
           $enrollment->set('certificate_status','not_issue');
         }
       } else{
-        $enrollment = $course->enroll($user_id,$status); // enrollment status: enrolled, awaiting_approval, pending, waiting_list, rejected, on-hold
+        $enrollment = $course->enroll($user_id,$status); // enrollment status: enrolled, awaiting_approval, pending, waiting_list, rejected, on_hold
         $course->set_attendance_record($user_id);
         $enrollment->set('amount',$item->get_total());
         $enrollment->set('order_id',$order_id);

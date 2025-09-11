@@ -85,7 +85,7 @@ jQuery(document).ready(function (e) {
             success: function (response) {
                 if (response.success) {
                     // If eligibility is passed
-                    addToWaitingList(product_id, course_id); // Directly add to cart if no upload required
+                    addToWaitingList(product_id, course_id);
                 } else {
                     showMessage('error', response.data.message );
                     if(response.data.redirect){
