@@ -657,6 +657,8 @@ function fetch_pupil_details() {
     }
 
     $pupils = [];
+    $cpd_table = $wpdb->prefix . 'hkota_cpd_records';
+    
     foreach ($results as $row) {
         // Fetch user details
         $user = get_userdata($row->user_id);
@@ -664,16 +666,28 @@ function fetch_pupil_details() {
             $attendance_data = maybe_unserialize($row->attendance);
             $uploads = maybe_unserialize($row->uploads);
 
+            // Get certificate file from CPD records
+            $certificate_file = '';
+            if ($row->certificate_status == 'issued') {
+                $cpd_record = $wpdb->get_row($wpdb->prepare(
+                    "SELECT file FROM $cpd_table WHERE user_id = %d AND course_id = %d",
+                    $row->user_id, $course_id
+                ));
+                if ($cpd_record && !empty($cpd_record->file)) {
+                    $certificate_file = $cpd_record->file;
+                }
+            }
+
             // Prepare uploaded document display
             $uploaded_documents = '';
             if (!empty($uploads)) {
                 foreach ($uploads as $cert => $filename) {
                     if (!empty($filename)) {
-												if( file_exists( COURSE_PUPIL_FILE_DIR . $filename ) ){
-													$uploaded_documents .= "<div class='cert-list-item'><span style='margin-right: 5px;'>$cert: </span><a target='_blank' href='" . COURSE_PUPIL_FILE_URL . $filename . "'>view file</a></div>";
-												} else{
-													$uploaded_documents .= "<div class='cert-list-item'><span style='margin-right: 5px;'>$cert: </span><span>$filename</span></div>";
-												}
+						if( file_exists( COURSE_PUPIL_FILE_DIR . $filename ) ){
+							$uploaded_documents .= "<div class='cert-list-item'><span style='margin-right: 5px;'>$cert: </span><a target='_blank' href='" . COURSE_PUPIL_FILE_URL . $filename . "'>view file</a></div>";
+						} else{
+							$uploaded_documents .= "<div class='cert-list-item'><span style='margin-right: 5px;'>$cert: </span><span>$filename</span></div>";
+						}
                     }
                 }
             }
@@ -685,6 +699,7 @@ function fetch_pupil_details() {
                 'enrollment_status'  => $row->status,
                 'attendance_status'  => $attendance_data['attendance_status'] ? $attendance_data['attendance_status'] : 'N/A',
 								'certificate_status' => $row->certificate_status ? $row->certificate_status : '' ,
+                'certificate_file'   => $certificate_file,
                 'uploaded_documents' => $uploaded_documents ? $uploaded_documents : 'Nil',
                 'user_id'     			 => $row->user_id
             ];
@@ -831,6 +846,31 @@ function check_pupil_data() {
     if (!empty($results)) {
         wp_send_json_success([
             'download_url' => admin_url('admin-post.php?action=export_pupil_data&course_id=' . $course_id)
+        ]);
+    } else {
+        wp_send_json_error();
+    }
+
+}
+
+add_action('wp_ajax_check_attendance_data', 'check_attendance_data');
+function check_attendance_data() {
+    global $wpdb;
+    $course_id = intval($_POST['course_id']);
+    $table_name = $wpdb->prefix . 'hkota_course_enrollment';
+
+    // Check if there is any enrolled pupil and if course has QR codes for attendance
+    $results = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM $table_name WHERE course_id = %d",
+        $course_id
+    ));
+
+    $course = new Course($course_id);
+    $qr_codes = $course->qr_code;
+
+    if (!empty($results) && !empty($qr_codes)) {
+        wp_send_json_success([
+            'download_url' => admin_url('admin-post.php?action=export_attendance_data&course_id=' . $course_id)
         ]);
     } else {
         wp_send_json_error();
@@ -1075,10 +1115,10 @@ function add_membership_product_to_cart() {
     $membership_plan_id = isset($_POST['membership_plan_id']) ? sanitize_text_field($_POST['membership_plan_id']) : '';
 		$type = isset($_POST['application_type']) ? sanitize_text_field($_POST['application_type']) : '';
     $years = isset($_POST['years']) ? intval($_POST['years']) : 0;
-		$end_year = isset($_POST['end_year']) ? intval($_POST['end_year']) : 0;
+		$start_year = isset($_POST['start_year']) ? intval($_POST['start_year']) : 0;
 		$user_membership_id = isset($_POST['user_membership_id']) ? intval($_POST['user_membership_id']) : 0;
 
-    if (empty($membership_plan_id) || $years <= 0 || empty($end_year) || empty($type) ) {
+    if (empty($membership_plan_id) || $years <= 0 || empty($start_year) || empty($type) ) {
         wp_send_json_error(['message' => 'Invalid membership application request.']);
     }
 
@@ -1103,6 +1143,22 @@ function add_membership_product_to_cart() {
     $fee = null;
     foreach ($tenures as $tenure) {
         if ($tenure['Years'] == $years) {
+
+			
+			//check if student applying full membership
+			$membership_plan = wc_memberships_get_membership_plan($membership_plan_id);
+			$current_plan_name = $membership_plan->name;
+			$user_id = get_current_user_id();
+			$args = array(
+					'status' => array('active')
+			);	
+			$user_memberships = wc_memberships_get_user_memberships($user_id, $args);
+			$user_plan_name = $user_memberships[0]->plan->name;
+			if( $current_plan_name === 'Full member' && $user_plan_name === 'Student member' ){
+				$fee = $tenure['renew']; // Use the renewal fee
+				break;
+			}
+
             $fee = $tenure[$type]; // Use the renewal fee
             break;
         }
@@ -1129,7 +1185,7 @@ function add_membership_product_to_cart() {
 				'user_membership_id' => $user_membership_id,
         'application_type' => $type,
         'years' => $years,
-				'end_year' => $end_year,
+				'start_year' => $start_year,
         'membership_fee' => $fee // Add the calculated fee to the item meta
     );
 
@@ -1161,6 +1217,18 @@ function get_membership_plans() {
 
     $available_plans = array();
 
+	//check if current user is student member
+	$is_student_member = false;
+	$user_id = get_current_user_id();
+	$args = array(
+			'status' => array('active')
+	);	
+	$user_memberships = wc_memberships_get_user_memberships($user_id, $args);
+	if (!empty($user_memberships)) {
+		$user_plan_name = $user_memberships[0]->plan->name;
+		$is_student_member = ($user_plan_name === 'Student member')? true : false;
+	}
+	
     // Loop through the membership plans and check for tenure data
     foreach ($membership_plans as $plan) {
         $tenures = get_post_meta($plan->get_id(), 'tenures', true);
@@ -1168,7 +1236,8 @@ function get_membership_plans() {
             $available_plans[] = array(
                 'id' => $plan->get_id(),
                 'name' => $plan->get_name(),
-                'tenures' => $tenures
+                'tenures' => $tenures,
+				'is_student_member' => $is_student_member
             );
         }
     }
@@ -2258,68 +2327,255 @@ function fetch_user_cpd_data() {
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+add_action('wp_ajax_resend_certificate_email', 'resend_certificate_email');
+
+function resend_certificate_email() {
+    // Check if user has proper permissions
+    if (!current_user_can('edit_courses')) {
+        wp_send_json_error('Insufficient permissions.');
+        return;
+    }
+
+    $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+    $course_id = isset($_POST['course_id']) ? intval($_POST['course_id']) : 0;
+
+    if (empty($user_id) || empty($course_id)) {
+        wp_send_json_error('Missing required parameters.');
+        return;
+    }
+
+    // Validate user exists
+    $user = get_user_by('ID', $user_id);
+    if (!$user) {
+        wp_send_json_error('User not found.');
+        return;
+    }
+
+    // Validate course exists
+    $course = new Course($course_id);
+    if (!$course->id) {
+        wp_send_json_error('Course not found.');
+        return;
+    }
+
+    // Check if user has a certificate issued for this course
+    $args = [
+        'user_id' => $user_id,
+        'course_id' => $course_id,
+    ];
+    $cpd_record = get_user_cpd_record_by('course_id', $args);
+    
+    if (!$cpd_record || empty($cpd_record->file)) {
+        wp_send_json_error('No certificate found for this user and course.');
+        return;
+    }
+
+    // Trigger the certificate email
+    try {
+        $result = $course->trigger_issue_certificate_email($user_id);
+        if ($result) {
+            wp_send_json_success('Certificate email sent successfully.');
+        } else {
+            wp_send_json_error('Failed to send certificate email.');
+        }
+    } catch (Exception $e) {
+        wp_send_json_error('Error sending email: ' . $e->getMessage());
+    }
+}
+
+add_action('wp_ajax_bulk_edit_pupils', 'bulk_edit_pupils');
+
+function bulk_edit_pupils() {
+    global $wpdb;
+    
+    // Security check
+    if (!current_user_can('edit_course')) {
+        wp_send_json_error(['message' => 'Insufficient permissions.']);
+    }
+
+    $pupil_ids = isset($_POST['pupil_ids']) ? array_map('intval', $_POST['pupil_ids']) : [];
+    $course_id = intval($_POST['course_id']);
+    $enrollment_status = sanitize_text_field($_POST['enrollment_status']);
+    $attendance_status = sanitize_text_field($_POST['attendance_status']);
+
+    if (empty($pupil_ids) || !$course_id) {
+        wp_send_json_error(['message' => 'Invalid pupil IDs or course ID.']);
+    }
+
+    if (empty($enrollment_status) && empty($attendance_status)) {
+        wp_send_json_error(['message' => 'No changes specified.']);
+    }
+
+    $table_name = $wpdb->prefix . 'hkota_course_enrollment';
+    $course = new Course($course_id);
+    $updated_count = 0;
+    $errors = [];
+
+    foreach ($pupil_ids as $user_id) {
+        try {
+            $enrollment_id = get_user_enrollment_id($user_id, $course_id);
+            
+            if (!$enrollment_id) {
+                $errors[] = "User ID $user_id is not enrolled in this course.";
+                continue;
+            }
+
+            $enrollment = new Enrollment($enrollment_id);
+            $update_data = [];
+
+            // Update enrollment status if provided
+            if (!empty($enrollment_status)) {
+                $current_status = $enrollment->status;
+                $update_data['status'] = $enrollment_status;
+                
+                // Handle enrollment status changes - only send emails if status is actually changing
+                if ($current_status !== $enrollment_status) {
+                    switch ($enrollment_status) {
+                        case 'enrolled':
+                            $course->trigger_enrolled_email($user_id);
+                            break;
+                        case 'rejected':
+                            $course->trigger_rejected_email($user_id);
+                            break;
+                    }
+                }
+            }
+
+            // Update attendance status if provided
+            if (!empty($attendance_status)) {
+                $current_attendance = maybe_unserialize($enrollment->attendance);
+                if (!is_array($current_attendance)) {
+                    $current_attendance = [];
+                }
+                $current_attendance_status = isset($current_attendance['attendance_status']) ? $current_attendance['attendance_status'] : '';
+                $current_attendance['attendance_status'] = $attendance_status;
+                $update_data['attendance'] = maybe_serialize($current_attendance);
+                
+                // Handle certificate generation for fully attended - only if status is changing
+                if ($attendance_status === 'fully_attended' && $current_attendance_status !== 'fully_attended' && $course->type === 'training') {
+                    $result = $course->create_certificate($user_id);
+                    if ($result) {
+                        $course->trigger_issue_certificate_email($user_id);
+                    }
+                }
+            }
+
+            // Perform the update
+            if (!empty($update_data)) {
+                $where = ['id' => $enrollment_id];
+                $result = $wpdb->update($table_name, $update_data, $where);
+                
+                if ($result !== false) {
+                    $updated_count++;
+                } else {
+                    $errors[] = "Failed to update user ID $user_id.";
+                }
+            }
+
+        } catch (Exception $e) {
+            $errors[] = "Error updating user ID $user_id: " . $e->getMessage();
+        }
+    }
+
+    if ($updated_count > 0) {
+        $message = "Successfully updated $updated_count pupil(s).";
+        if (!empty($errors)) {
+            $message .= " Errors: " . implode(', ', $errors);
+        }
+        wp_send_json_success(['message' => $message]);
+    } else {
+        wp_send_json_error(['message' => 'No pupils were updated. ' . implode(', ', $errors)]);
+    }
+}
+
+add_action('wp_ajax_fetch_attendance_details', 'fetch_attendance_details');
+
+function fetch_attendance_details() {
+    // Security check
+    if (!current_user_can('edit_course')) {
+        wp_send_json_error(['message' => 'Insufficient permissions.']);
+    }
+
+    $user_id = intval($_POST['user_id']);
+    $course_id = intval($_POST['course_id']);
+
+    if (!$user_id || !$course_id) {
+        wp_send_json_error(['message' => 'Invalid user ID or course ID.']);
+    }
+
+    // Get user and course information
+    $user = get_userdata($user_id);
+    $course = new Course($course_id);
+    
+    if (!$user || !$course->id) {
+        wp_send_json_error(['message' => 'User or course not found.']);
+    }
+
+    // Get enrollment information
+    $enrollment_id = get_user_enrollment_id($user_id, $course_id);
+    if (!$enrollment_id) {
+        wp_send_json_error(['message' => 'User is not enrolled in this course.']);
+    }
+
+    $enrollment = new Enrollment($enrollment_id);
+    $attendance_data = maybe_unserialize($enrollment->attendance);
+    
+    // Get course QR codes
+    $qr_codes = $course->qr_code;
+    
+    $attendance_sections = [];
+    
+    if (!empty($qr_codes) && is_array($qr_codes)) {
+        foreach ($qr_codes as $qr_code) {
+            // Only include attendance-related QR codes
+            if ($qr_code['type'] == 'registration' || $qr_code['type'] == 'end' || $qr_code['type'] == 'end_survey') {
+                $section_id = $qr_code['id'];
+                $attended = false;
+                
+                // Check if user attended this section
+                if (isset($attendance_data['attendance_data'][$section_id]) && $attendance_data['attendance_data'][$section_id] == 1) {
+                    $attended = true;
+                }
+                
+                // Format the date and time string like in QR code generation
+                $date_time = $qr_code['type'] . ' @ ' . $qr_code['time'] . '/' . $qr_code['date'];
+                
+                $attendance_sections[] = [
+                    'section_id' => $section_id,
+                    'section_name' => ucfirst($qr_code['type']),
+                    'date_time' => $date_time,
+                    'attended' => $attended,
+                    'raw_date' => $qr_code['date'],
+                    'raw_time' => $qr_code['time']
+                ];
+            }
+        }
+    }
+    
+    // Sort sections by date and time (ascending order)
+    usort($attendance_sections, function($a, $b) {
+        // First compare by date
+        $date_comparison = strtotime($a['raw_date']) - strtotime($b['raw_date']);
+        if ($date_comparison !== 0) {
+            return $date_comparison;
+        }
+        // If dates are the same, compare by time
+        return strtotime($a['raw_time']) - strtotime($b['raw_time']);
+    });
+    
+    // Remove the raw_date and raw_time from the final output
+    foreach ($attendance_sections as &$section) {
+        unset($section['raw_date']);
+        unset($section['raw_time']);
+    }
+    
+    $response_data = [
+        'user_name' => $user->first_name . ' ' . $user->last_name,
+        'course_name' => $course->title,
+        'overall_status' => isset($attendance_data['attendance_status']) ? $attendance_data['attendance_status'] : 'not_attended',
+        'attendance_sections' => $attendance_sections
+    ];
+    
+    wp_send_json_success($response_data);
+}
 ?>

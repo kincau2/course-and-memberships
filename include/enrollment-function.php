@@ -105,8 +105,8 @@ function display_custom_meta_in_cart($item_data, $cart_item) {
       );
   }
 
-  if ( isset($cart_item['end_year']) && isset($cart_item['years']) ) {
-      $start_date = date( 'Y' . '-05-01' , strtotime( ' - 1 year' , strtotime( $cart_item['end_year'] . '-01-01' ) ) );
+  if ( isset($cart_item['start_year']) && isset($cart_item['years']) ) {
+      $start_date = date( 'Y' . '-05-01' , strtotime( $cart_item['start_year'] . '-05-01' ) );
       $end_date = date( 'Y' . '-04-30' , strtotime( '+ ' . $cart_item['years'] . ' years' , strtotime( $start_date ) ) );
       $item_data[] = array(
           'name' => 'Period',
@@ -154,7 +154,7 @@ function final_validation_before_payment($fields, $errors) {
     if( $cart_item['product_id'] == $membership_product_id ){
       $membership_plan_id = $cart_item['membership_plan_id'];
       if( empty( $membership_plan_id ) ||
-          empty( $cart_item['end_year'] ) ||
+          empty( $cart_item['start_year'] ) ||
           empty( $cart_item['years'] ) ||
           empty( $cart_item['application_type'] ) ){
         wc_add_notice(__('Sorry, ' . 'unexpected error occurred.', 'woocommerce'), 'error');
@@ -239,10 +239,10 @@ function add_custom_meta_to_order_items($item, $cart_item_key, $values, $order) 
     if (isset($values['application_type'])) {
         $item->add_meta_data( "application_type" , $values['application_type'] , true);
     }
-    if ( isset( $values['end_year'] ) && isset( $values['years'] ) ) {
-        $item->add_meta_data( "end_year" , $values['end_year'] , true);
+    if ( isset( $values['start_year'] ) && isset( $values['years'] ) ) {
+        $item->add_meta_data( "start_year" , $values['start_year'] , true);
         $item->add_meta_data( "years" , $values['years'] , true);
-        $start_date = date( 'Y' . '-05-01' , strtotime( ' - 1 year' , strtotime( $values['end_year'] . '-01-01' ) ) );
+        $start_date = date( 'Y' . '-05-01' , strtotime( $values['start_year'] . '-05-01' ) );
         $end_date = date( 'Y' . '-04-30' , strtotime( '+ ' . $values['years'] . ' years' , strtotime( $start_date ) ) );
         $item->add_meta_data( "period" , $start_date.' to '.$end_date , true);
     }
@@ -262,7 +262,7 @@ function modify_order_details_page_meta_strings(){
       jQuery('.wc-item-meta-label').each( function(){
         var str = jQuery(this).text();
         if( str == 'course_id:' ||
-            str == 'end_year:' ||
+            str == 'start_year:' ||
             str == 'years:' ||
             str == 'membership_plan_id:' ||
             str == 'user_membership_id:'
@@ -677,7 +677,7 @@ function hide_course_id_meta_in_emails( $formatted_meta, $item ) {
     // Loop through the meta data and unset the 'course_id'
     foreach ( $formatted_meta as $key => $meta ) {
         if ( $meta->key == 'course_id' ||
-             $meta->key == 'end_year' ||
+             $meta->key == 'start_year' ||
              $meta->key == 'years' ||
              $meta->key == 'membership_plan_id' ||
              $meta->key == 'user_membership_id'

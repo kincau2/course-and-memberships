@@ -189,6 +189,80 @@ jQuery(document).ready(function (e) {
       jQuery('#pupil-details-table').fadeIn();
   });
 
+  // View certificate button click
+  jQuery(document).on('click', '.view-certificate', function(e) {
+      e.preventDefault();
+      var certificateFile = jQuery(this).data('certificate-file');
+      if (certificateFile) {
+          // Open certificate in new tab - construct URL dynamically
+          var baseUrl = window.location.origin;
+          var certificateUrl = baseUrl + '/wp-content/uploads/certificate/' + certificateFile;
+          window.open(certificateUrl, '_blank');
+      }
+  });
+
+  // Resend certificate email button click
+  jQuery(document).on('click', '.resend-certificate', function(e) {
+      e.preventDefault();
+      var userId = jQuery(this).data('user-id');
+      var courseId = jQuery(this).data('course-id');
+      var button = jQuery(this);
+      
+      // Disable button and show loading state
+      button.prop('disabled', true).text('Sending...');
+      
+      jQuery.ajax({
+          url: hkota_backend_ajax.ajaxurl,
+          type: 'POST',
+          data: {
+              action: 'resend_certificate_email',
+              user_id: userId,
+              course_id: courseId
+          },
+          success: function(response) {
+              if (response.success) {
+                  showMessage('notice', 'Certificate email sent successfully!');
+              } else {
+                  showMessage('error', response.data || 'Failed to send certificate email.');
+              }
+              // Restore button state
+              button.prop('disabled', false).text('Resend');
+          },
+          error: function() {
+              showMessage('error', 'An error occurred while sending the certificate email.');
+              // Restore button state
+              button.prop('disabled', false).text('Resend');
+          }
+      });
+  });
+
+  // View attendance details button click
+  jQuery(document).on('click', '.view-attendance', function(e) {
+      e.preventDefault();
+      var userId = jQuery(this).data('user-id');
+      var courseId = jQuery(this).data('course-id');
+      
+      jQuery.ajax({
+          url: hkota_backend_ajax.ajaxurl,
+          type: 'POST',
+          data: {
+              action: 'fetch_attendance_details',
+              user_id: userId,
+              course_id: courseId
+          },
+          success: function(response) {
+              if (response.success) {
+                  showAttendanceDetailsPopup(response.data);
+              } else {
+                  showMessage('error', response.data.message || 'Failed to fetch attendance details.');
+              }
+          },
+          error: function() {
+              showMessage('error', 'An error occurred while fetching attendance details.');
+          }
+      });
+  });
+
   jQuery('#download-quiz-button').on('click', function (e) {
        e.preventDefault();
 
@@ -262,6 +336,91 @@ jQuery(document).ready(function (e) {
             showMessage('error', 'An error occurred while checking pupil data.');
         }
     });
+  });
+
+  jQuery('#download-attendance-button').on('click', function (e) {
+    e.preventDefault();
+
+    var courseId = jQuery(this).data('course-id');
+
+    jQuery.ajax({
+        url: hkota_backend_ajax.ajaxurl,
+        type: 'POST',
+        data: {
+            action: 'check_attendance_data',
+            course_id: courseId
+        },
+        success: function (response) {
+            if (response.success) {
+                window.location.href = response.data.download_url;
+            } else {
+                showMessage('error', 'There is no attendance data yet.');
+            }
+        },
+        error: function () {
+            showMessage('error', 'An error occurred while checking attendance data.');
+        }
+    });
+  });
+
+  // Bulk actions functionality
+  jQuery(document).on('change', '#cb-select-all', function() {
+      var isChecked = jQuery(this).is(':checked');
+      jQuery('input[name="pupil_ids[]"]').prop('checked', isChecked);
+  });
+
+  jQuery(document).on('change', 'input[name="pupil_ids[]"]', function() {
+      var totalCheckboxes = jQuery('input[name="pupil_ids[]"]').length;
+      var checkedCheckboxes = jQuery('input[name="pupil_ids[]"]:checked').length;
+      
+      if (checkedCheckboxes === totalCheckboxes) {
+          jQuery('#cb-select-all').prop('checked', true);
+      } else {
+          jQuery('#cb-select-all').prop('checked', false);
+      }
+  });
+
+  jQuery(document).on('click', '#bulk-apply-btn', function() {
+      var selectedAction = jQuery('#bulk-action-selector').val();
+      var selectedPupils = jQuery('input[name="pupil_ids[]"]:checked');
+      
+      if (!selectedAction) {
+          showMessage('error', 'Please select a bulk action.');
+          return;
+      }
+      
+      if (selectedPupils.length === 0) {
+          showMessage('error', 'Please select at least one pupil.');
+          return;
+      }
+      
+      if (selectedAction === 'edit') {
+          showBulkEditRow();
+      }
+  });
+
+  jQuery(document).on('click', '#bulk-edit-apply', function() {
+      var enrollmentStatus = jQuery('#bulk-enrollment-status').val();
+      var attendanceStatus = jQuery('#bulk-attendance-status').val();
+      var selectedPupils = [];
+      
+      jQuery('input[name="pupil_ids[]"]:checked').each(function() {
+          selectedPupils.push(jQuery(this).val());
+      });
+      
+      if (!enrollmentStatus && !attendanceStatus) {
+          showMessage('error', 'Please select at least one field to update.');
+          return;
+      }
+      
+      var confirmMessage = 'Are you sure you want to bulk update ' + selectedPupils.length + ' pupil(s)?';
+      if (confirm(confirmMessage)) {
+          performBulkEdit(selectedPupils, enrollmentStatus, attendanceStatus);
+      }
+  });
+
+  jQuery(document).on('click', '#bulk-edit-cancel', function() {
+      jQuery('#bulk-edit-row').remove();
   });
 
   // Function to add new tenure set
@@ -608,18 +767,59 @@ function render_pupil_table(course_id){
           if (response.success) {
               var pupils = response.data.pupil;
               var tableBody = jQuery('#pupil-details-table tbody');
+              var tableHead = jQuery('#pupil-details-table thead tr');
               tableBody.empty(); // Clear any existing rows
+              
+              // Update table header to include checkbox column if not already present
+              if (!tableHead.find('th:first').hasClass('check-column')) {
+                  tableHead.prepend('<th class="check-column"><input type="checkbox" id="cb-select-all"></th>');
+              }
+              
+              // Ensure proper header structure 
+              var expectedHeaders = [
+                  '<th class="check-column"><input type="checkbox" id="cb-select-all"></th>',
+                  '<th>First Name</th>',
+                  '<th>Last Name</th>',
+                  '<th>Email</th>',
+                  '<th>Enrollment Status</th>',
+                  '<th>Attendance Status</th>',
+                  '<th>Certificate</th>',
+                  '<th>Documents</th>',
+                  '<th>Actions</th>'
+              ];
+              
+              if (tableHead.children().length !== expectedHeaders.length) {
+                  tableHead.html(expectedHeaders.join(''));
+              }
 
               pupils.forEach(function(pupil) {
+                  // Build certificate column content
+                  var certificateContent = capitalizeFirstLetter(pupil.certificate_status.replace('_', ' '));
+                  
+                  // Add view and resend buttons if certificate is issued
+                  if (pupil.certificate_status === 'issued' && pupil.certificate_file) {
+                      certificateContent += '<br><div style="margin-top: 5px;">';
+                      certificateContent += `<button type="button" class="button-link view-certificate" data-certificate-file="${pupil.certificate_file}" style="color: #0073aa; text-decoration: none; border: none; background: none; padding: 0; cursor: pointer;">View</button>`;
+                      certificateContent += ' | ';
+                      certificateContent += `<button type="button" class="button-link resend-certificate" data-user-id="${pupil.user_id}" data-course-id="${course_id}" style="color: #0073aa; text-decoration: none; border: none; background: none; padding: 0; cursor: pointer;">Resend</button>`;
+                      certificateContent += '</div>';
+                  }
+                  
+                  // Build attendance column content
+                  var attendanceContent = capitalizeFirstLetter(pupil.attendance_status.replace('_', ' '));
+                  attendanceContent += '<br><div style="margin-top: 5px;">';
+                  attendanceContent += `<button type="button" class="button-link view-attendance" data-user-id="${pupil.user_id}" data-course-id="${course_id}" style="color: #0073aa; text-decoration: none; border: none; background: none; padding: 0; cursor: pointer;">View Attendance</button>`;
+                  attendanceContent += '</div>';
+                  
                   var row = `<tr>
+                      <td class="check-column"><input type="checkbox" name="pupil_ids[]" value="${pupil.user_id}"></td>
                       <td>${pupil.first_name}</td>
                       <td>${pupil.last_name}</td>
                       <td>${pupil.email}</td>
                       <td data-enrollment-status=${pupil.enrollment_status} >${capitalizeFirstLetter(pupil.enrollment_status.replace('_', ' '))}</td>
-                      <td data-attendance-status=${pupil.attendance_status}>${capitalizeFirstLetter(pupil.attendance_status.replace('_', ' '))}</td>
+                      <td data-attendance-status=${pupil.attendance_status}>${attendanceContent}</td>
                       <td>
-
-                        ${capitalizeFirstLetter(pupil.certificate_status.replace('_', ' '))}
+                        ${certificateContent}
                       </td>
                       <td>${pupil.uploaded_documents}</td>`;
                   if( response.data.capability ){
@@ -631,16 +831,30 @@ function render_pupil_table(course_id){
                   tableBody.append(row);
               });
 
+              // Add bulk actions interface if not already present
+              if (!jQuery('#pupil-bulk-actions').length) {
+                  var bulkActionsHtml = `
+                      <div id="pupil-bulk-actions" style="margin-bottom: 15px;">
+                          <select id="bulk-action-selector">
+                              <option value="">Bulk actions</option>
+                              <option value="edit">Edit</option>
+                          </select>
+                          <button type="button" id="bulk-apply-btn" class="button">Apply</button>
+                      </div>
+                  `;
+                  jQuery('#pupil-details-table').before(bulkActionsHtml);
+              }
+
               // Initialize Tablesorter
               jQuery("#pupil-details-table").tablesorter({
                   // Optional configurations can be set here
-                  sortList: [[0, 0]],  // Sort by first column (first name) ascending by default
+                  sortList: [[1, 0]],  // Sort by first name column (now column 1 due to checkbox) ascending by default
                   widgets: ["zebra"],  // Adds zebra striping to the rows
                   headers: {
-                      // If you want to disable sorting for specific columns (like the "Actions" column), add this
-                      7: { sorter: false } ,
-                      6: { sorter: false }
-                       // Disables sorting for the last column (Actions)
+                      // Disable sorting for specific columns
+                      0: { sorter: false }, // Checkbox column
+                      8: { sorter: false }, // Actions column
+                      7: { sorter: false }  // Documents column
                   }
               });
 
@@ -799,4 +1013,181 @@ function getPoster(postID){
        }
     });
   },3000);
+}
+
+function showBulkEditRow() {
+    // Remove existing bulk edit row if present
+    jQuery('#bulk-edit-row').remove();
+    
+    var bulkEditHtml = `
+        <tr id="bulk-edit-row" style="background-color: #f9f9f9;">
+            <td colspan="9" style="padding: 15px;">
+                <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                    <div>
+                        <label for="bulk-enrollment-status"><strong>Enrollment Status:</strong></label>
+                        <select id="bulk-enrollment-status" style="margin-left: 5px;">
+                            <option value="">— No Change —</option>
+                            <option value="enrolled">Enrolled</option>
+                            <option value="awaiting_approval">Awaiting Approval</option>
+                            <option value="pending">Pending</option>
+                            <option value="waiting_list">Waiting List</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="bulk-attendance-status"><strong>Attendance Status:</strong></label>
+                        <select id="bulk-attendance-status" style="margin-left: 5px;">
+                            <option value="">— No Change —</option>
+                            <option value="not_attended">Not Attended</option>
+                            <option value="fully_attended">Fully Attended</option>
+                            <option value="partially_attended">Partially Attended</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="button" id="bulk-edit-apply" class="button button-primary">Update</button>
+                        <button type="button" id="bulk-edit-cancel" class="button">Cancel</button>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    `;
+    
+    // Insert after table header
+    jQuery('#pupil-details-table thead').after(bulkEditHtml);
+}
+
+function performBulkEdit(pupilIds, enrollmentStatus, attendanceStatus) {
+    var courseId = jQuery('#pupil-details-table').data('course-id');
+    
+    jQuery.ajax({
+        url: hkota_backend_ajax.ajaxurl,
+        type: 'POST',
+        data: {
+            action: 'bulk_edit_pupils',
+            pupil_ids: pupilIds,
+            course_id: courseId,
+            enrollment_status: enrollmentStatus,
+            attendance_status: attendanceStatus
+        },
+        success: function(response) {
+            if (response.success) {
+                showMessage('notice', response.data.message || 'Bulk update completed successfully.');
+                jQuery('#bulk-edit-row').remove();
+                // Refresh the table
+                render_pupil_table(courseId);
+            } else {
+                showMessage('error', response.data.message || 'An error occurred during bulk update.');
+            }
+        },
+        error: function() {
+            showMessage('error', 'An error occurred while performing bulk update.');
+        }
+    });
+}
+
+function showAttendanceDetailsPopup(data) {
+    // Remove existing attendance popup if present
+    jQuery('#attendance-details-popup').remove();
+    
+    var pupilName = data.user_name || 'Unknown User';
+    var courseName = data.course_name || 'Unknown Course';
+    var attendanceSections = data.attendance_sections || [];
+    
+    var popupHtml = `
+        <div id="attendance-details-popup" class="popup-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+            <div class="popup-content" style="background: white; padding: 20px; border-radius: 5px; max-width: 600px; width: 90%; max-height: 80%; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px;">
+                    <h2 style="margin: 0;">Attendance Details</h2>
+                    <button class="close-attendance-popup" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #666;">&times;</button>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <strong>Student:</strong> ${pupilName}<br>
+                    <strong>Course:</strong> ${courseName}
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <strong>Overall Attendance Status:</strong> 
+                    <span style="padding: 4px 8px; border-radius: 3px; background-color: ${getAttendanceStatusColor(data.overall_status)}; color: white;">
+                        ${capitalizeFirstLetter((data.overall_status || 'not_attended').replace('_', ' '))}
+                    </span>
+                </div>
+                
+                <h3>QR Code Scan Details:</h3>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                    <thead>
+                        <tr style="background-color: #f2f2f2;">
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Section</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Date & Time</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    if (attendanceSections.length > 0) {
+        attendanceSections.forEach(function(section) {
+            var statusText = section.attended ? 'Checked' : 'Not Checked';
+            var statusColor = section.attended ? '#28a745' : '#dc3545';
+            var statusIcon = section.attended ? '✓' : '✗';
+            
+            popupHtml += `
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${section.section_name}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${section.date_time}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">
+                        <span style="color: ${statusColor}; font-weight: bold;">
+                            ${statusIcon} ${statusText}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+    } else {
+        popupHtml += `
+            <tr>
+                <td colspan="3" style="border: 1px solid #ddd; padding: 20px; text-align: center; color: #666;">
+                    No QR code sections found for this course.
+                </td>
+            </tr>
+        `;
+    }
+    
+    popupHtml += `
+                    </tbody>
+                </table>
+                
+                <div style="margin-top: 20px; text-align: right;">
+                    <button class="close-attendance-popup button" type="button">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Append popup to body
+    jQuery('body').append(popupHtml);
+    
+    // Add event handlers
+    jQuery('.close-attendance-popup').on('click', function() {
+        jQuery('#attendance-details-popup').remove();
+    });
+    
+    // Close popup when clicking on overlay
+    jQuery('#attendance-details-popup').on('click', function(e) {
+        if (e.target.id === 'attendance-details-popup') {
+            jQuery('#attendance-details-popup').remove();
+        }
+    });
+}
+
+function getAttendanceStatusColor(status) {
+    switch(status) {
+        case 'fully_attended':
+            return '#28a745';
+        case 'partially_attended':
+            return '#ffc107';
+        case 'not_attended':
+        default:
+            return '#dc3545';
+    }
 }

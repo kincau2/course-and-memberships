@@ -46,8 +46,8 @@ function set_default_membership_status_to_pause($order_id, $old_status, $new_sta
       $membership_plan_id = wc_get_order_item_meta( $item_id, 'membership_plan_id', true );
       $application_type = wc_get_order_item_meta( $item_id, 'application_type', true );
       $years = wc_get_order_item_meta( $item_id, 'years', true );
-      $next_end_year = wc_get_order_item_meta( $item_id, 'end_year', true );
-      $membership_start_date = date( 'Y' . '-05-01' , strtotime( ' - 1 year' , strtotime( $next_end_year . '-01-01' ) ) );
+      $start_year = wc_get_order_item_meta( $item_id, 'start_year', true );
+      $membership_start_date = date( 'Y' . '-05-01' , strtotime( $start_year . '-01-01' ) );
       $membership_end_date = date( 'Y' . '-04-30 16:00:00' , strtotime( '+ ' . $years . ' years' , strtotime( $membership_start_date ) ) );
 
       $user_id = $order->get_user_id();
@@ -77,7 +77,7 @@ function set_default_membership_status_to_pause($order_id, $old_status, $new_sta
         );
 
         $user_membership = wc_memberships_create_user_membership( $args,'renew');
-        set_transient('debug', $user_membership, 30 );
+
         update_post_meta($user_membership->id,'_end_date', $membership_end_date );
         set_membership_status( $user_id ,$user_membership->id,"wcm-active");
         expire_user_other_membership($user_id,$user_membership->id);
@@ -954,7 +954,7 @@ function add_custom_member_columns( $columns ) {
         }
         $new_columns[$key] = $value;
     }
-    set_transient( 'debug', $columns, 30 ); // Cache for 12 hours
+
     return $new_columns;
 }
 

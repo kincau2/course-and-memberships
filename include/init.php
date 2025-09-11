@@ -38,18 +38,18 @@ function init_plugin(){
 function create_course_posttype() {
     $args = array(
         'labels'              => array(
-                                    'name' => __( 'Courses' , 'hkota'),
-                                    'singular_name' => __( 'Course' , 'hkota'),
-                                    'all_items' => __( 'All Courses', 'hkota' ),
-                                    'view_item' => __( 'View Course', 'hkota' ),
-                                    'add_new_item' => __( 'Add New Course', 'hkota' ),
-                                    'add_new' => __( 'Add New Course', 'hkota' ),
-                                    'edit_item' => __( 'Edit Course', 'hkota' ),
-                                    'update_item' => __( 'Update Course', 'hkota' ),
-                                    'search_items' => __( 'Search Course', 'hkota' ),
-                                    'not_found' => __( 'Not Found', 'hkota' ),
-                                    'not_found_in_trash' => __( 'Not found in Trash', 'hkota' )
-                                 ),
+          'name' => __( 'Courses' , 'hkota'),
+          'singular_name' => __( 'Course' , 'hkota'),
+          'all_items' => __( 'All Courses', 'hkota' ),
+          'view_item' => __( 'View Course', 'hkota' ),
+          'add_new_item' => __( 'Add New Course', 'hkota' ),
+          'add_new' => __( 'Add New Course', 'hkota' ),
+          'edit_item' => __( 'Edit Course', 'hkota' ),
+          'update_item' => __( 'Update Course', 'hkota' ),
+          'search_items' => __( 'Search Course', 'hkota' ),
+          'not_found' => __( 'Not Found', 'hkota' ),
+          'not_found_in_trash' => __( 'Not found in Trash', 'hkota' )
+        ),
         'rewrite'             => array('slug' => 'courses'),
         'public'              => true,
         'publicly_queryable'  => true,

@@ -1239,6 +1239,60 @@ class Course {
         background-color: #f2f2f2;
         font-weight: bold;
       }
+      
+      .check-column {
+        width: 30px;
+        text-align: center;
+      }
+      
+      #pupil-bulk-actions {
+        margin-bottom: 15px;
+        padding: 10px;
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+      }
+      
+      #pupil-bulk-actions select {
+        margin-right: 10px;
+      }
+      
+      #bulk-edit-row {
+        background-color: #fff8dc;
+        border: 2px solid #ffec8c;
+      }
+      
+      #bulk-edit-row td {
+        padding: 15px;
+      }
+      
+      #bulk-edit-row label {
+        font-weight: 600;
+        margin-right: 5px;
+      }
+      
+      #bulk-edit-row select {
+        margin-right: 15px;
+        min-width: 150px;
+      }
+      
+      #attendance-details-popup .popup-content {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      }
+      
+      #attendance-details-popup table {
+        font-size: 14px;
+      }
+      
+      #attendance-details-popup th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+      }
+      
+      #attendance-details-popup .close-attendance-popup:hover {
+        color: #000;
+      }
+      
       .tablesorter th {
           cursor: pointer;
       }

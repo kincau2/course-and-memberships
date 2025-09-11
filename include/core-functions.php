@@ -19,8 +19,15 @@ add_shortcode('debug', 'display_debug_message');
 
 function display_debug_message(){
 
+  $args = array(
+        'status' => array('active','expired','paused'),
+    );
 
-    // $course = new Course( 4529 );
+  $user_memberships = wc_memberships_get_user_memberships(1, $args);
+  $membership_plan = wc_memberships_get_membership_plan(129);
+  echo "<pre>";
+	echo print_r($membership_plan);
+	echo "</pre>";
 
 	echo "<pre>";
 	echo print_r(get_transient('debug'),1);
@@ -143,100 +150,6 @@ function hkota_ot_render_pagination($current_page, $total_pages) {
         $output .= '</div>';
     }
     return $output;
-}
-
-//add_shortcode('fetch_table','fetch_table');
-function fetch_table(){
-  // Fetch the content from the target URL using cURL
-  $url_1 = 'https://www.smp-council.org.hk/hkifd/browse.php?search=OT1';
-  $ch = curl_init($url_1);
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-  $html = curl_exec($ch);
-
-  if (curl_errno($ch)) {
-      die('cURL Error: ' . curl_error($ch));
-  }
-  curl_close($ch);
-
-  // Load the HTML content into DOMDocument
-  $dom = new DOMDocument();
-  libxml_use_internal_errors(true);
-  $dom->loadHTML($html);
-  libxml_clear_errors();
-  $xpath = new DOMXPath($dom);
-  // Find the table rows (adjust the XPath if necessary)
-  $table_1_rows = $xpath->query('//table//tr');
-
-  $url_2 = 'https://www.smp-council.org.hk/hkifd/browse.php?search=OT2';
-  $ch = curl_init($url_2);
-  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-  $html = curl_exec($ch);
-  if (curl_errno($ch)) {
-      die('cURL Error: ' . curl_error($ch));
-  }
-  curl_close($ch);
-  // Load the HTML content into DOMDocument
-  $dom = new DOMDocument();
-  libxml_use_internal_errors(true);
-  $dom->loadHTML($html);
-  libxml_clear_errors();
-
-  $xpath = new DOMXPath($dom);
-  // Find the table rows (adjust the XPath if necessary)
-  $table_2_rows = $xpath->query('//table//tr');
-
-  global $wpdb;
-  $table_name = $wpdb->prefix . 'hkota_ot_list';
-  $wpdb->query("DELETE FROM $table_name");
-  $wpdb->query("TRUNCATE TABLE $table_name");
-
-  foreach ($table_1_rows as $table_1_row) {
-
-    // Extract cell data
-    $cells = $table_1_row->getElementsByTagName('td');
-    // Check if the row has the expected number of cells
-    if ($cells->length >= 3) {
-      $wpdb->insert(
-          $table_name,
-          [
-              'Registration_no' => trim($cells->item(0)->textContent),
-              'eng_name'        => trim($cells->item(1)->textContent),
-              'chi_name'        => trim($cells->item(2)->textContent)
-          ],
-          [
-              '%s', // Data type for Registration_no (string)
-              '%s', // Data type for eng_name (string)
-              '%s'  // Data type for chi_name (string)
-          ]
-      );
-    }
-  }
-
-  foreach ($table_2_rows as $table_2_row) {
-
-    // Extract cell data
-    $cells = $table_2_row->getElementsByTagName('td');
-    // Check if the row has the expected number of cells
-    if ($cells->length >= 3) {
-        $wpdb->insert(
-            $table_name,
-            [
-                'Registration_no' => trim($cells->item(0)->textContent),
-                'eng_name'        => trim($cells->item(1)->textContent),
-                'chi_name'        => trim($cells->item(2)->textContent)
-            ],
-            [
-                '%s', // Data type for Registration_no (string)
-                '%s', // Data type for eng_name (string)
-                '%s'  // Data type for chi_name (string)
-            ]
-        );
-    }
-  }
-
-
 }
 
 add_shortcode('course-filter','course_filter');
@@ -1373,6 +1286,11 @@ function generate_poster(){
 		$options->set('isHtml5ParserEnabled', true);
 
 		$options->set('isRemoteEnabled', true);
+		
+		// Enable Unicode support for Chinese characters
+		$options->set('defaultFont', 'DejaVu Sans');
+		$options->set('defaultMediaType', 'print');
+		$options->set('isFontSubsettingEnabled', true);
 
 		$options->set('fontDir',  $tmp);
 
@@ -2053,6 +1971,110 @@ function export_pupil_data() {
     exit;
 }
 
+// Register the admin action hook for exporting attendance data
+add_action('admin_post_export_attendance_data', 'export_attendance_data');
+function export_attendance_data() {
+    global $wpdb;
+
+    // Security check - ensure user can edit courses
+    if (!current_user_can('edit_course')) {
+        wp_die('Insufficient permissions.');
+    }
+
+    // Verify if the course ID is set in the query string
+    if (!isset($_GET['course_id'])) {
+        wp_die('Course ID is required.');
+    }
+
+    $course_id = intval($_GET['course_id']);
+    $course = new Course($course_id);
+    $table_name = $wpdb->prefix . 'hkota_course_enrollment';
+
+    // Get QR codes (attendance sections) for this course
+    $qr_codes = $course->qr_code;
+    
+    if (empty($qr_codes)) {
+        wp_die('No QR codes found for this course.');
+    }
+
+    // Fetch enrolled pupils' attendance data for this course
+    $enrollment_data = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT user_id, attendance FROM $table_name WHERE course_id = %d",
+            $course_id
+        )
+    );
+
+    if (empty($enrollment_data)) {
+        wp_die('No enrollment data found.');
+    }
+
+    // Prepare CSV headers
+    $headers = ['ID', 'Name', 'Email'];
+    
+    // Add QR code sections as headers using the same format as QR code labels
+    foreach ($qr_codes as $qr_code) {
+        if ($qr_code['type'] == 'registration' || $qr_code['type'] == 'end' || $qr_code['type'] == 'end_survey') {
+            $header = $qr_code['type'] . ' @ ' . $qr_code['time'] . '/' . $qr_code['date'];
+            $headers[] = $header;
+        }
+    }
+
+    // Prepare data for CSV
+    $csv_data = [];
+
+    foreach ($enrollment_data as $row) {
+        $user = get_userdata($row->user_id);
+        if (!$user) continue;
+
+        // Start with basic user info
+        $data_row = [
+            $row->user_id,
+            $user->last_name . ', ' . $user->first_name,
+            $user->user_email
+        ];
+
+        // Parse attendance data
+        $attendance_data = maybe_unserialize($row->attendance);
+        
+        // Add attendance status for each QR code section
+        foreach ($qr_codes as $qr_code) {
+            if ($qr_code['type'] == 'registration' || $qr_code['type'] == 'end' || $qr_code['type'] == 'end_survey') {
+                $section_id = $qr_code['id'];
+                
+                // Check if user attended this section
+                $attended = '';
+                if (isset($attendance_data['attendance_data'][$section_id]) && $attendance_data['attendance_data'][$section_id] == 1) {
+                    $attended = 'checked';
+                }
+                
+                $data_row[] = $attended;
+            }
+        }
+
+        $csv_data[] = $data_row;
+    }
+
+    // Start CSV export
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="Attendance data of ' . $course->title . '.csv"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    $csv_file = fopen('php://output', 'w');
+
+    // Output CSV headers
+    fputcsv($csv_file, $headers);
+
+    // Output the data rows
+    foreach ($csv_data as $data_row) {
+        fputcsv($csv_file, $data_row);
+    }
+
+    fclose($csv_file);
+    exit;
+}
+
 // Create Certificate
 add_action('template_redirect', 'handle_certificate_generation');
 function handle_certificate_generation() {
@@ -2076,6 +2098,70 @@ function protect_certificate_access() {
   // Check if the URL contains the certificate path. If not, proceed normally
   if (strpos($current_url, 'wp-content/uploads/certificate/') == false) return;
 
+  // Check if the user is logged in
+  if (!is_user_logged_in()) {
+      ?>
+        <div class="error-overlay" id="errorOverlay">
+          <div class="error-box" id="errorBox">
+              <h2>You must log in to view this file.</h2>
+              <a href="<?php echo home_url('/my-account'); ?>" class="button">Log In</a>
+          </div>
+        </div>
+      <?php
+      exit;
+  }
+
+  // Get the current user ID
+  $current_user_id = get_current_user_id();
+
+  // Extract the file name from the URL
+  $file_name = basename($current_url);
+
+  // Query the database to get the CPD record that matches the file name
+  global $wpdb;
+  $table_name = $wpdb->prefix . 'hkota_cpd_records';
+  $cpd_record = $wpdb->get_row($wpdb->prepare(
+      "SELECT * FROM $table_name WHERE file = %s",
+      $file_name
+  ));
+
+  // Check if the CPD record exists and if the current user is the owner
+  if ( $cpd_record && ( $cpd_record->user_id == $current_user_id || current_user_can('administrator' ) ) ) {
+      // The user is authorized to view the certificate, proceed normally
+      $file_path = WP_CONTENT_DIR . '/uploads/certificate/' . $file_name;
+      if (file_exists($file_path)) {
+        // Clear any previous output to prevent corruption
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="' . $file_name . '"');
+        header('Content-Length: ' . filesize($file_path));
+        
+        readfile($file_path);
+        exit; // Critical: Stop execution to prevent additional output
+    } else {
+      ?>
+        <div class="error-overlay" id="errorOverlay">
+          <div class="error-box" id="errorBox">
+              <h2>File not found..</h2>
+          </div>
+        </div>
+      <?php
+        echo "<div class='error-box'> <a href='" . home_url() . "'>Return to Home</a></div>";
+    }
+
+  } else {
+    ?>
+    <div class="error-overlay" id="errorOverlay">
+      <div class="error-box" id="errorBox">
+          <h2>You are not authorized to access this certificate.</h2>
+      </div>
+    </div>
+    <?php
+      exit;
+  }
   ?>
   <style>
     /* Full-screen overlay to dim the background */
@@ -2123,63 +2209,6 @@ function protect_certificate_access() {
     }
   </style>
   <?php
-
-  // Check if the user is logged in
-  if (!is_user_logged_in()) {
-      ?>
-        <div class="error-overlay" id="errorOverlay">
-          <div class="error-box" id="errorBox">
-              <h2>You must log in to view this file.</h2>
-              <a href="<?php echo home_url('/my-account'); ?>" class="button">Log In</a>
-          </div>
-        </div>
-      <?php
-      exit;
-  }
-
-  // Get the current user ID
-  $current_user_id = get_current_user_id();
-
-  // Extract the file name from the URL
-  $file_name = basename($current_url);
-
-  // Query the database to get the CPD record that matches the file name
-  global $wpdb;
-  $table_name = $wpdb->prefix . 'hkota_cpd_records';
-  $cpd_record = $wpdb->get_row($wpdb->prepare(
-      "SELECT * FROM $table_name WHERE file = %s",
-      $file_name
-  ));
-
-  // Check if the CPD record exists and if the current user is the owner
-  if ( $cpd_record && ( $cpd_record->user_id == $current_user_id || current_user_can('administrator' ) ) ) {
-      // The user is authorized to view the certificate, proceed normally
-      $file_path = WP_CONTENT_DIR . '/uploads/certificate/' . $file_name;
-      if (file_exists($file_path)) {
-        header('Content-Type: application/pdf');
-        header('Content-Disposition: inline; filename="' . $file_name . '"');
-        readfile($file_path);
-    } else {
-      ?>
-        <div class="error-overlay" id="errorOverlay">
-          <div class="error-box" id="errorBox">
-              <h2>File not found..</h2>
-          </div>
-        </div>
-      <?php
-        echo "<div class='error-box'> <a href='" . home_url() . "'>Return to Home</a></div>";
-    }
-
-  } else {
-    ?>
-    <div class="error-overlay" id="errorOverlay">
-      <div class="error-box" id="errorBox">
-          <h2>You are not authorized to access this certificate.</h2>
-      </div>
-    </div>
-    <?php
-      exit;
-  }
 
 }
 
@@ -2672,19 +2701,3 @@ function my_login_logo() {
 	<?php
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-?>

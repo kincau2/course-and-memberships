@@ -474,7 +474,7 @@ jQuery(document).ready(function (e) {
         const membership_plan_id = jQuery(this).data('membership-id');
         const user_membership_id = jQuery(this).data('user-membership-id');
         const today = new Date();
-        const end_year = today.getFullYear() + 1;
+        const start_year = today.getFullYear();
         var button = jQuery(this);
         button.append(' <i style="margin-left:5px;" class="fa fa-spinner fa-spin"></i>').prop('disabled', true);
         // Send AJAX request to add the product to the cart
@@ -486,7 +486,7 @@ jQuery(document).ready(function (e) {
                 membership_plan_id: membership_plan_id,
                 years: years,
                 application_type: 'renew',
-                end_year: end_year,
+                start_year: start_year,
                 user_membership_id : user_membership_id
             },
             success: function(response) {
@@ -532,6 +532,7 @@ jQuery(document).ready(function (e) {
             success: function(response) {
                 if (response.success) {
                     plans = response.data;
+                    isStudentMember = response.data.is_student_member;
                     let planOptions = '<option value="">Select a membership plan</option>';
 
                     // Build the options for the membership plans select element
@@ -588,10 +589,15 @@ jQuery(document).ready(function (e) {
 
             if (selectedPlan) {
                 let tenureOptions = '<option value="">Select tenure</option>';
-
                 // Build the tenure options based on the selected membership plan
                 selectedPlan.tenures.forEach(function(tenure) {
-                    tenureOptions += `<option value="${tenure.Years}">${tenure.Years} Year(s) - New Fee: ${tenure.new}</option>`;
+                    // If the user is a student member, user renew fee
+                    if( selectedPlan.is_student_member && selectedPlan.name === 'Full member'){
+                        fee = tenure.renew;
+                    } else{
+                        fee = tenure.new;
+                    }
+                    tenureOptions += `<option value="${tenure.Years}">${tenure.Years} Year(s) - New Fee: ${fee}</option>`;
                 });
 
                 // Display tenure selection
@@ -660,8 +666,8 @@ jQuery(document).ready(function (e) {
             const nextEndDate = `${nextEndYear}-04-30`;
             
             periodOptions = `
-                <option value="${currentYear}">${currentStartDate} - ${currentEndDate} (${selectedYears} year${selectedYears > 1 ? 's' : ''})</option>
-                <option value="${currentYear + 1}">${nextStartDate} - ${nextEndDate} (${selectedYears} year${selectedYears > 1 ? 's' : ''})</option>
+                <option value="${currentStartYear}">${currentStartDate} - ${currentEndDate} (${selectedYears} year${selectedYears > 1 ? 's' : ''})</option>
+                <option value="${nextStartYear}">${nextStartDate} - ${nextEndDate} (${selectedYears} year${selectedYears > 1 ? 's' : ''})</option>
             `;
         } else {
             // After April 30th - can only buy next period
@@ -671,7 +677,7 @@ jQuery(document).ready(function (e) {
             const nextEndDate = `${nextEndYear}-04-30`;
             
             periodOptions = `
-                <option value="${currentYear + 1}">${nextStartDate} - ${nextEndDate} (${selectedYears} year${selectedYears > 1 ? 's' : ''})</option>
+                <option value="${nextStartYear}">${nextStartDate} - ${nextEndDate} (${selectedYears} year${selectedYears > 1 ? 's' : ''})</option>
             `;
         }
         
@@ -682,7 +688,7 @@ jQuery(document).ready(function (e) {
     // Handle renewal confirmation
     jQuery(document).on('click', '#add-membership-to-cart', function() {
         const years = jQuery('#tenure-select').val();
-        const end_year = jQuery('#membership-plan-period').val();
+        const start_year = jQuery('#membership-plan-period').val();
         const membership_plan_id = jQuery(this).data('membership-id');
         var button = jQuery(this);
         button.append(' <i style="margin-left:5px;" class="fa fa-spinner fa-spin"></i>').prop('disabled', true);
@@ -694,7 +700,7 @@ jQuery(document).ready(function (e) {
                 action: 'add_membership_product_to_cart',
                 membership_plan_id: membership_plan_id,
                 years: years,
-                end_year: end_year,
+                start_year: start_year,
                 application_type: 'new'
             },
             success: function(response) {

@@ -270,9 +270,25 @@ function cpd_records_content() {
 
     if($results){
       foreach ($results as $result):
+        // Get the course to determine the last date
+        $course = new Course($result->course_id);
+        $course_last_date = '';
+        
+        // Get the last date from the course rundown
+        if (!empty($course->rundown) && is_array($course->rundown)) {
+            // Sort rundown by date to get the last one
+            $rundown_sorted = $course->rundown;
+            usort($rundown_sorted, function($a, $b) {
+                return strtotime($b['date']) - strtotime($a['date']);
+            });
+            $course_last_date = date('Y-m-d', strtotime($rundown_sorted[0]['date']));
+        } else {
+            // Fallback to issue date if no rundown is available
+            $course_last_date = $result->date_issued;
+        }
         ?>
           <tr>
-            <td class="date-issued"><?php echo $result->date_issued;?></td>
+            <td class="date-issued"><?php echo $course_last_date;?></td>
             <td class="title"><?php echo $result->title;?></td>
             <td class="code"><?php echo $result->code;?></td>
             <td class="organization"><?php echo $result->organization;?></td>
