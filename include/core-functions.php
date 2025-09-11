@@ -435,9 +435,9 @@ function single_display_course_date(){
     <div class="course-wrapper visable <?php echo $course->type ;?>">
         <div class="course-heading">
             <h1 class="theme-green"><?php echo $course->title; ?></h1>
-                                <?php if($course->type == 'training' ): ?>
-                                    <span>(Course Code: <?php echo $course->code; ?>)</span>
-                                <?php endif; ?>
+                <?php if($course->type == 'training' ): ?>
+                    <span>(Course Code: <?php echo $course->code; ?>)</span>
+                <?php endif; ?>
         </div>
         <div class="course-info">
             <div class="course-pdf">
@@ -521,20 +521,20 @@ function single_display_course_date(){
                           <?php
                         }
                       ?>
-                                        <?php else: ?>
-                                            <a target="_blank"
-                                                 href="<?php echo $course->external_link ;?>"
-                                                 class="<?php
-                                                                    if( date("Y-m-d") > date($course->start_date) ){
-                                                                        echo "disabled";
-                                                                    }
-                                                                ?>"
-                                                                <?php
-                                                                    if( date("Y-m-d") > date($course->start_date) ){
-                                                                         echo "disabled";
-                                                                    }
-                                                                ?>>Browse</a>
-                                        <?php endif; ?>
+                        <?php else: ?>
+                          <a target="_blank"
+                            href="<?php echo $course->external_link ;?>"
+                            class="<?php
+                              if( date("Y-m-d") > date($course->start_date) || empty($course->external_link) ){
+                                  echo "disabled";
+                              }
+                          ?>"
+                          <?php
+                              if( date("Y-m-d") > date($course->start_date) || empty($course->external_link) ){
+                                    echo "disabled";
+                              }
+                          ?>>Browse</a>
+                        <?php endif; ?>
               </div>
             </div>
         </div>
