@@ -92,11 +92,11 @@ jQuery(document).ready(function (e) {
       // Get the current row details
       var user_id = jQuery(this).data('user-id');
       var currentRow = jQuery(this).closest('tr');
-      var first_name = currentRow.find('td:nth-child(1)').text();
-      var last_name = currentRow.find('td:nth-child(2)').text();
-      var email = currentRow.find('td:nth-child(3)').text();
-      var enrollment_status = currentRow.find('td:nth-child(4)').data('enrollment-status');
-      var attendance_status = currentRow.find('td:nth-child(5)').data('attendance-status');
+      var first_name = currentRow.find('td:nth-child(2)').text();
+      var last_name = currentRow.find('td:nth-child(3)').text();
+      var email = currentRow.find('td:nth-child(4)').text();
+      var enrollment_status = currentRow.find('td:nth-child(5)').data('enrollment-status');
+      var attendance_status = currentRow.find('td:nth-child(6)').data('attendance-status');
       var course_id = jQuery('#pupil-details-table').data('course-id');
 
       // Hide main table and show edit table
@@ -823,7 +823,15 @@ function render_pupil_table(course_id){
                       </td>
                       <td>${pupil.uploaded_documents}</td>`;
                   if( response.data.capability ){
-                    row += `<td><button type="button" class="button button-secondary edit-pupil" data-user-id=${pupil.user_id}>Edit</button></td></tr>`;
+                    row += `<td>
+                        <button type="button" class="button button-secondary edit-pupil" data-user-id=${pupil.user_id}>Edit</button>`;
+                    
+                    // Add Accept button for waiting list candidates
+                    if (pupil.enrollment_status === 'waiting_list') {
+                        row += `<br><button type="button" class="button button-primary accept-waiting-list" data-user-id="${pupil.user_id}" data-user-name="${pupil.first_name} ${pupil.last_name}" data-user-email="${pupil.email}" style="margin-top: 5px;">Accept</button>`;
+                    }
+                    
+                    row += `</td></tr>`;
                   } else{
                     row += `<td><button type="button" class="button button-secondary edit-pupil" data-user-id=${pupil.user_id} disabled>Edit</button></td></tr>`;
                   }
@@ -1059,30 +1067,128 @@ function showBulkEditRow() {
 function performBulkEdit(pupilIds, enrollmentStatus, attendanceStatus) {
     var courseId = jQuery('#pupil-details-table').data('course-id');
     
+    // Show progress modal
+    showUniversalProgressModal(pupilIds.length, 'Processing Bulk Edit', 'students');
+    
+    // Initialize tracking variables
+    const editResults = [];
+    let currentIndex = 0;
+    let successCount = 0;
+    let errorCount = 0;
+    
+    // Disable bulk edit button
+    jQuery('#bulk-edit-apply').prop('disabled', true).text('Processing...');
+    
+    // Start processing pupils one by one
+    processNextPupil(courseId, pupilIds, enrollmentStatus, attendanceStatus, currentIndex, editResults, successCount, errorCount);
+}
+
+function processNextPupil(courseId, pupilIds, enrollmentStatus, attendanceStatus, currentIndex, editResults, successCount, errorCount) {
+    if (currentIndex >= pupilIds.length) {
+        // All pupils processed, show final results
+        completeBulkEditProcess(editResults, successCount, errorCount, pupilIds.length, courseId);
+        return;
+    }
+    
+    const currentPupilId = pupilIds[currentIndex];
+    const pupilName = `Student ${currentPupilId}`; // We'll get the actual name from response
+    
+    updateUniversalProgressBar(currentIndex + 1, pupilIds.length, `Processing ${pupilName}...`, 'students');
+    
+    // Process single pupil
     jQuery.ajax({
         url: hkota_backend_ajax.ajaxurl,
         type: 'POST',
         data: {
-            action: 'bulk_edit_pupils',
-            pupil_ids: pupilIds,
+            action: 'bulk_edit_single_pupil',
+            pupil_id: currentPupilId,
             course_id: courseId,
             enrollment_status: enrollmentStatus,
             attendance_status: attendanceStatus
         },
         success: function(response) {
+            let result;
             if (response.success) {
-                showMessage('notice', response.data.message || 'Bulk update completed successfully.');
-                jQuery('#bulk-edit-row').remove();
-                // Refresh the table
-                render_pupil_table(courseId);
+                result = {
+                    user_id: currentPupilId,
+                    user_name: response.data.user_name || pupilName,
+                    user_email: response.data.user_email || 'N/A',
+                    success: true,
+                    message: response.data.message || 'Updated successfully'
+                };
+                successCount++;
             } else {
-                showMessage('error', response.data.message || 'An error occurred during bulk update.');
+                result = {
+                    user_id: currentPupilId,
+                    user_name: response.data.user_name || pupilName,
+                    user_email: response.data.user_email || 'N/A',
+                    success: false,
+                    message: response.data.message || 'Update failed'
+                };
+                errorCount++;
             }
+            
+            editResults.push(result);
+            
+            // Update progress with result
+            const statusText = result.success ? 
+                `✓ ${result.user_name} - Updated successfully` : 
+                `✗ ${result.user_name} - ${result.message}`;
+            updateUniversalProgressBar(currentIndex + 1, pupilIds.length, statusText, 'students');
+            
+            // Small delay to let user see the status, then process next
+            setTimeout(function() {
+                processNextPupil(courseId, pupilIds, enrollmentStatus, attendanceStatus, currentIndex + 1, editResults, successCount, errorCount);
+            }, 500);
         },
         error: function() {
-            showMessage('error', 'An error occurred while performing bulk update.');
+            const result = {
+                user_id: currentPupilId,
+                user_name: pupilName,
+                user_email: 'N/A',
+                success: false,
+                message: 'AJAX request failed'
+            };
+            
+            editResults.push(result);
+            errorCount++;
+            
+            updateUniversalProgressBar(currentIndex + 1, pupilIds.length, `✗ ${pupilName} - Network error`, 'students');
+            
+            // Continue to next pupil even if there's an error
+            setTimeout(function() {
+                processNextPupil(courseId, pupilIds, enrollmentStatus, attendanceStatus, currentIndex + 1, editResults, successCount, errorCount);
+            }, 500);
         }
     });
+}
+
+function completeBulkEditProcess(results, successCount, errorCount, totalProcessed, courseId) {
+    // Final update to progress bar
+    updateUniversalProgressBar(totalProcessed, totalProcessed, 'All updates completed!', 'students');
+    
+    // Wait a moment then show results
+    setTimeout(function() {
+        // Close progress modal
+        closeUniversalProgressModal();
+        
+        // Re-enable bulk edit button and remove bulk edit row
+        jQuery('#bulk-edit-apply').prop('disabled', false).text('Update');
+        jQuery('#bulk-edit-row').remove();
+        
+        // Show detailed results
+        const consolidatedData = {
+            results: results,
+            success_count: successCount,
+            error_count: errorCount,
+            total_processed: totalProcessed
+        };
+        
+        showUniversalResultsModal(consolidatedData, 'Bulk Edit', 'students');
+        
+        // Refresh the pupil details table
+        render_pupil_table(courseId);
+    }, 1500);
 }
 
 function showAttendanceDetailsPopup(data) {
@@ -1191,3 +1297,534 @@ function getAttendanceStatusColor(status) {
             return '#dc3545';
     }
 }
+
+// Universal Modal Functions (Global scope for use across all features)
+function showUniversalProgressModal(totalItems, operationType = 'Processing', itemName = 'items') {
+    // Remove any existing progress modal
+    jQuery('#universal-progress-modal').remove();
+    
+    const modalTitle = `${operationType} ${itemName}`;
+    const initialMessage = `Starting ${operationType.toLowerCase()} process...`;
+    
+    const modalHtml = `
+        <div id="universal-progress-modal" class="popup-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+            <div class="popup-content" style="background: white; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%; text-align: center;">
+                <h2 style="margin: 0 0 20px 0; color: #0073aa;">${modalTitle}</h2>
+                
+                <div style="margin-bottom: 20px;">
+                    <div style="background: #f1f1f1; border-radius: 10px; height: 20px; overflow: hidden; margin-bottom: 10px;">
+                        <div id="progress-bar-fill" style="background: linear-gradient(90deg, #0073aa, #005177); height: 100%; width: 0%; transition: width 0.3s ease; border-radius: 10px;"></div>
+                    </div>
+                    <div id="progress-text" style="font-weight: bold; color: #333;">Initializing...</div>
+                    <div id="progress-counter" style="color: #666; margin-top: 5px;">0 of ${totalItems} ${itemName} processed</div>
+                </div>
+                
+                <div id="progress-status" style="text-align: left; max-height: 150px; overflow-y: auto; background: #f9f9f9; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; border: 1px solid #ddd;">
+                    <div style="color: #666;">${initialMessage}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    jQuery('body').append(modalHtml);
+}
+
+function updateUniversalProgressBar(current, total, statusMessage, itemName = 'items') {
+    const percentage = (current / total) * 100;
+    
+    jQuery('#progress-bar-fill').css('width', percentage + '%');
+    jQuery('#progress-text').text(statusMessage);
+    jQuery('#progress-counter').text(`${current} of ${total} ${itemName} processed`);
+    
+    // Add status message to log
+    const timestamp = new Date().toLocaleTimeString();
+    jQuery('#progress-status').append(`<div style="margin-bottom: 3px;"><span style="color: #999;">[${timestamp}]</span> ${statusMessage}</div>`);
+    
+    // Auto-scroll to bottom
+    const statusDiv = jQuery('#progress-status')[0];
+    if (statusDiv) {
+        statusDiv.scrollTop = statusDiv.scrollHeight;
+    }
+}
+
+function closeUniversalProgressModal() {
+    jQuery('#universal-progress-modal').remove();
+}
+
+function showUniversalResultsModal(data, operationType = 'Operation', itemName = 'items') {
+    // Remove any existing results popup
+    jQuery('#universal-results-popup').remove();
+    
+    const results = data.results || [];
+    const successfulResults = results.filter(result => result.success);
+    const failedResults = results.filter(result => !result.success);
+    
+    let popupHtml = `
+        <div id="universal-results-popup" class="popup-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+            <div class="popup-content" style="background: white; padding: 20px; border-radius: 5px; max-width: 800px; width: 90%; max-height: 80%; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #0073aa; padding-bottom: 10px;">
+                    <h2 style="margin: 0; color: #0073aa;">${operationType} Results</h2>
+                    <button class="close-universal-results-popup" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; font-weight: bold;">&times;</button>
+                </div>
+                
+                <div style="margin-bottom: 20px; padding: 15px; background: #f0f8ff; border: 1px solid #b3d9ff; border-radius: 5px;">
+                    <h3 style="margin: 0 0 10px 0; color: #0073aa;">Summary</h3>
+                    <p style="margin: 5px 0;"><strong>Total Processed:</strong> ${data.total_processed}</p>
+                    <p style="margin: 5px 0; color: #28a745;"><strong>Successful:</strong> ${data.success_count}</p>
+                    <p style="margin: 5px 0; color: #dc3545;"><strong>Failed:</strong> ${data.error_count}</p>
+                </div>
+    `;
+    
+    // Show successful results
+    if (successfulResults.length > 0) {
+        popupHtml += `
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #28a745; border-bottom: 1px solid #28a745; padding-bottom: 5px;">
+                    <i class="fa-solid fa-check-circle"></i> Successful ${operationType} (${successfulResults.length})
+                </h3>
+                <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 3px;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="background-color: #f8f9fa; position: sticky; top: 0;">
+                            <tr>
+                                <th style="border: 1px solid #dee2e6; padding: 8px; text-align: left; font-weight: bold;">Name</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px; text-align: left; font-weight: bold;">Email</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px; text-align: left; font-weight: bold;">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        successfulResults.forEach(function(result) {
+            popupHtml += `
+                <tr>
+                    <td style="border: 1px solid #dee2e6; padding: 8px;">${result.user_name || result.name || 'N/A'}</td>
+                    <td style="border: 1px solid #dee2e6; padding: 8px;">${result.user_email || result.email || 'N/A'}</td>
+                    <td style="border: 1px solid #dee2e6; padding: 8px;">${result.message || result.details || 'Success'}</td>
+                </tr>
+            `;
+        });
+        
+        popupHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Show failed results
+    if (failedResults.length > 0) {
+        popupHtml += `
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #dc3545; border-bottom: 1px solid #dc3545; padding-bottom: 5px;">
+                    <i class="fa-solid fa-exclamation-triangle"></i> Failed ${operationType} (${failedResults.length})
+                </h3>
+                <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 3px;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead style="background-color: #f8f9fa; position: sticky; top: 0;">
+                            <tr>
+                                <th style="border: 1px solid #dee2e6; padding: 8px; text-align: left; font-weight: bold;">Name</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px; text-align: left; font-weight: bold;">Email</th>
+                                <th style="border: 1px solid #dee2e6; padding: 8px; text-align: left; font-weight: bold;">Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        failedResults.forEach(function(result) {
+            popupHtml += `
+                <tr>
+                    <td style="border: 1px solid #dee2e6; padding: 8px;">${result.user_name || result.name || 'N/A'}</td>
+                    <td style="border: 1px solid #dee2e6; padding: 8px;">${result.user_email || result.email || 'N/A'}</td>
+                    <td style="border: 1px solid #dee2e6; padding: 8px; color: #dc3545;">${result.message || 'Unknown error'}</td>
+                </tr>
+            `;
+        });
+        
+        popupHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    popupHtml += `
+                <div style="text-align: right; margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px;">
+                    <button id="export-universal-results" class="button button-secondary" type="button" style="margin-right: 10px;">
+                        <i class="fa-solid fa-download"></i> Export CSV
+                    </button>
+                    <button class="close-universal-results-popup button button-primary" type="button">Close</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Append popup to body
+    jQuery('body').append(popupHtml);
+    
+    // Add event handlers
+    jQuery('.close-universal-results-popup').on('click', function() {
+        jQuery('#universal-results-popup').remove();
+    });
+    
+    // Export CSV functionality
+    jQuery('#export-universal-results').on('click', function() {
+        exportUniversalResultsToCSV(data, operationType);
+    });
+    
+    // Close popup when clicking on overlay
+    jQuery('#universal-results-popup').on('click', function(e) {
+        if (e.target.id === 'universal-results-popup') {
+            jQuery('#universal-results-popup').remove();
+        }
+    });
+}
+
+function exportUniversalResultsToCSV(data, operationType = 'operation') {
+    const results = data.results || [];
+    
+    // Create CSV header
+    const headers = ['Name', 'Email', 'Status', 'Details/Message'];
+    
+    // Create CSV rows
+    const csvRows = [headers];
+    
+    results.forEach(function(result) {
+        const row = [
+            result.user_name || result.name || 'N/A',
+            result.user_email || result.email || 'N/A',
+            result.success ? 'Success' : 'Failed',
+            result.message || result.details || ''
+        ];
+        csvRows.push(row);
+    });
+    
+    // Convert to CSV string
+    const csvContent = csvRows.map(row => 
+        row.map(field => `"${String(field).replace(/"/g, '""')}"`)
+           .join(',')
+    ).join('\n');
+    
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        
+        // Generate filename with timestamp
+        const now = new Date();
+        const timestamp = now.getFullYear() + 
+                        String(now.getMonth() + 1).padStart(2, '0') + 
+                        String(now.getDate()).padStart(2, '0') + '_' +
+                        String(now.getHours()).padStart(2, '0') + 
+                        String(now.getMinutes()).padStart(2, '0');
+        
+        link.setAttribute('download', `${operationType.toLowerCase().replace(/\s+/g, '_')}_results_${timestamp}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+// Admin Enrollment Functionality
+jQuery(document).ready(function() {
+    let selectedUsers = [];
+    let searchTimeout;
+
+    // Show/hide user selection dropdown
+    jQuery(document).on('click', '#add-candidate-payment-btn', function() {
+        jQuery('#user-selection-dropdown').slideToggle();
+        jQuery('#user-search-input').focus();
+    });
+
+    // User search functionality
+    jQuery(document).on('input', '#user-search-input', function() {
+        let searchTerm = jQuery(this).val().trim();
+        
+        clearTimeout(searchTimeout);
+        
+        if (searchTerm.length >= 2) {
+            searchTimeout = setTimeout(function() {
+                searchUsers(searchTerm);
+            }, 300);
+        } else {
+            jQuery('#user-suggestions').hide();
+        }
+    });
+
+    // Add user from suggestions
+    jQuery(document).on('click', '.user-suggestion-item', function() {
+        let userData = {
+            id: jQuery(this).data('user-id'),
+            name: jQuery(this).data('user-name'),
+            email: jQuery(this).data('user-email')
+        };
+        
+        addUserToSelection(userData);
+        jQuery('#user-search-input').val('');
+        jQuery('#user-suggestions').hide();
+    });
+
+    // Remove user from selection
+    jQuery(document).on('click', '.remove-user', function() {
+        let userId = jQuery(this).data('user-id');
+        removeUserFromSelection(userId);
+    });
+
+    // Confirm enrollment
+    jQuery(document).on('click', '#confirm-enrollment', function() {
+        if (selectedUsers.length === 0) {
+            alert('Please select at least one user.');
+            return;
+        }
+        
+        let courseId = jQuery('#pupil-details-table').data('course-id');
+        
+        if (confirm(`Create pending orders and send payment links to ${selectedUsers.length} user(s)?`)) {
+            startBulkEnrollmentProcess(courseId, selectedUsers);
+        }
+    });
+
+    // Cancel enrollment
+    jQuery(document).on('click', '#cancel-enrollment', function() {
+        selectedUsers = [];
+        updateSelectedUsersDisplay();
+        jQuery('#user-selection-dropdown').slideUp();
+        jQuery('#user-search-input').val('');
+        jQuery('#user-suggestions').hide();
+    });
+
+    // Accept waiting list candidate
+    jQuery(document).on('click', '.accept-waiting-list', function() {
+        let userId = jQuery(this).data('user-id');
+        let userName = jQuery(this).data('user-name');
+        let userEmail = jQuery(this).data('user-email');
+        let courseId = jQuery('#pupil-details-table').data('course-id');
+        
+        if (confirm(`Accept ${userName} from waiting list and create payment order?\n\nThis will:\n- Change status from "Waiting List" to "On Hold"\n- Create a pending WooCommerce order\n- Send payment request email to ${userEmail}`)) {
+            
+            // Create user object in same format as bulk enrollment
+            let userToAccept = [{
+                id: userId,
+                name: userName,
+                email: userEmail
+            }];
+            
+            // Use the same bulk enrollment process but for single user
+            startBulkEnrollmentProcess(courseId, userToAccept, true); // true indicates waiting list acceptance
+        }
+    });
+
+    function searchUsers(searchTerm) {
+        let courseId = jQuery('#pupil-details-table').data('course-id');
+        
+        jQuery.ajax({
+            url: hkota_backend_ajax.ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'search_users_for_course_enrollment',
+                search_term: searchTerm,
+                course_id: courseId,
+                nonce: hkota_backend_ajax.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    displayUserSuggestions(response.data);
+                } else {
+                    console.error('Search failed:', response.data);
+                }
+            },
+            error: function() {
+                console.error('AJAX request failed');
+            }
+        });
+    }
+
+    function displayUserSuggestions(users) {
+        let suggestionsHtml = '';
+        
+        if (users.length === 0) {
+            suggestionsHtml = '<div class="user-suggestion-item">No users found</div>';
+        } else {
+            users.forEach(function(user) {
+                // Skip users already selected
+                if (!selectedUsers.find(selected => selected.id == user.id)) {
+                    suggestionsHtml += `
+                        <div class="user-suggestion-item" 
+                             data-user-id="${user.id}" 
+                             data-user-name="${user.last_name}, ${user.first_name}" 
+                             data-user-email="${user.user_email}">
+                            <strong>${user.last_name}, ${user.first_name}</strong><br>
+                            <small>${user.user_email}</small>
+                        </div>
+                    `;
+                }
+            });
+        }
+        
+        jQuery('#user-suggestions').html(suggestionsHtml).show();
+    }
+
+    function addUserToSelection(userData) {
+        // Check if user is already selected
+        if (selectedUsers.find(user => user.id == userData.id)) {
+            return;
+        }
+        
+        selectedUsers.push(userData);
+        updateSelectedUsersDisplay();
+    }
+
+    function removeUserFromSelection(userId) {
+        selectedUsers = selectedUsers.filter(user => user.id != userId);
+        updateSelectedUsersDisplay();
+    }
+
+    function updateSelectedUsersDisplay() {
+        let tagsHtml = '';
+        
+        selectedUsers.forEach(function(user) {
+            tagsHtml += `
+                <span class="user-tag">
+                    ${user.name} (${user.email})
+                    <span class="remove-user" data-user-id="${user.id}">&times;</span>
+                </span>
+            `;
+        });
+        
+        jQuery('#selected-users-tags').html(tagsHtml);
+    }
+
+    function startBulkEnrollmentProcess(courseId, users, isWaitingListAcceptance = false) {
+        // Determine operation type and labels
+        const operationType = isWaitingListAcceptance ? 'Processing Waiting List Acceptance' : 'Processing Enrollments';
+        
+        // Show progress modal
+        showUniversalProgressModal(users.length, operationType, 'users');
+        
+        // Initialize tracking variables
+        const enrollmentResults = [];
+        let currentIndex = 0;
+        let successCount = 0;
+        let errorCount = 0;
+        
+        // Disable the confirm button (if it exists)
+        jQuery('#confirm-enrollment').prop('disabled', true).text('Processing...');
+        
+        // Start processing users one by one
+        processNextUser(courseId, users, currentIndex, enrollmentResults, successCount, errorCount, isWaitingListAcceptance);
+    }
+    
+    function processNextUser(courseId, users, currentIndex, enrollmentResults, successCount, errorCount, isWaitingListAcceptance) {
+        if (currentIndex >= users.length) {
+            // All users processed, show final results
+            completeEnrollmentProcess(enrollmentResults, successCount, errorCount, users.length);
+            return;
+        }
+        
+        const currentUser = users[currentIndex];
+        updateUniversalProgressBar(currentIndex + 1, users.length, `Processing ${currentUser.name}...`, 'users');
+        
+        // Process single user
+        createOrderForSingleUser(courseId, currentUser, isWaitingListAcceptance, function(result) {
+            // Add result to collection
+            enrollmentResults.push(result);
+            
+            if (result.success) {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+            
+            // Update progress with result
+            const actionText = isWaitingListAcceptance ? 'accepted' : 'enrolled';
+            const statusText = result.success ? 
+                `✓ ${currentUser.name} - ${actionText} successfully` : 
+                `✗ ${currentUser.name} - ${result.message}`;
+            updateUniversalProgressBar(currentIndex + 1, users.length, statusText, 'users');
+            
+            // Small delay to let user see the status, then process next
+            setTimeout(function() {
+                processNextUser(courseId, users, currentIndex + 1, enrollmentResults, successCount, errorCount, isWaitingListAcceptance);
+            }, 500);
+        });
+    }
+    
+    function createOrderForSingleUser(courseId, user, isWaitingListAcceptance, callback) {
+      console.log('Creating order for user:', user, 'Waiting list acceptance:', isWaitingListAcceptance);
+      jQuery.ajax({
+        url: hkota_backend_ajax.ajaxurl,
+        method: 'POST',
+        data: {
+            action: 'handle_admin_create_order_for_course',
+            course_id: courseId,
+            user_ids: [user.id], // Single user array
+            is_waiting_list_acceptance: isWaitingListAcceptance, // Pass the flag
+            nonce: hkota_backend_ajax.nonce
+        },
+        success: function(response) {
+            if (response.success && response.data.results && response.data.results.length > 0) {
+                // Extract the single result
+                const result = response.data.results[0];
+                callback(result);
+            } else {
+                callback({
+                    user_id: user.id,
+                    user_name: user.name,
+                    user_email: user.email,
+                    success: false,
+                    message: response.data || 'Unknown error occurred'
+                });
+            }
+        },
+        error: function() {
+            callback({
+                user_id: user.id,
+                user_name: user.name,
+                user_email: user.email,
+                success: false,
+                message: 'AJAX request failed'
+            });
+        }
+    });
+    }
+    
+    function completeEnrollmentProcess(results, successCount, errorCount, totalProcessed) {
+        // Final update to progress bar
+        updateUniversalProgressBar(totalProcessed, totalProcessed, 'All enrollments completed!', 'users');
+        
+        // Wait a moment then show results
+        setTimeout(function() {
+            // Close progress modal
+            closeUniversalProgressModal();
+            
+            // Re-enable confirm button
+            jQuery('#confirm-enrollment').prop('disabled', false).text('Create Orders & Send Payment Links');
+            
+            // Show detailed results
+            const consolidatedData = {
+                results: results,
+                success_count: successCount,
+                error_count: errorCount,
+                total_processed: totalProcessed
+            };
+            
+            showUniversalResultsModal(consolidatedData, 'Enrollment', 'users');
+            
+            // Reset the form
+            selectedUsers = [];
+            updateSelectedUsersDisplay();
+            jQuery('#user-selection-dropdown').slideUp();
+            jQuery('#user-search-input').val('');
+            jQuery('#user-suggestions').hide();
+            
+            // Refresh the pupil details table
+            jQuery('#show-pupil-details').trigger('click');
+            jQuery('#show-pupil-details').trigger('click'); // Second click to refresh data
+        }, 1500);
+    }
+});

@@ -23,7 +23,7 @@ $user = $args['user'];
         <div class="header">
             <img src="<?php echo plugins_url( '/hkota-courses-and-memberships/asset/logo-wz-text.png' ) ?>" alt="HKOTA logo">
         </div>
-        <h1>Course Enrollment Status Update</h1>
+        <h1>COURSE ENROLLMENT STATUS UPDATE</h1>
         <!-- Main Content Section -->
         <p>Dear <?php echo $user->last_name.', '. $user->first_name ;?>,</p>
         <p>We regret to inform you that your enrollment in the following course has been <strong>rejected</strong>:</p>

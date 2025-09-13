@@ -19,16 +19,6 @@ add_shortcode('debug', 'display_debug_message');
 
 function display_debug_message(){
 
-  $args = array(
-        'status' => array('active','expired','paused'),
-    );
-
-  $user_memberships = wc_memberships_get_user_memberships(1, $args);
-  $membership_plan = wc_memberships_get_membership_plan(129);
-  echo "<pre>";
-	echo print_r($membership_plan);
-	echo "</pre>";
-
 	echo "<pre>";
 	echo print_r(get_transient('debug'),1);
 	echo "</pre>";
@@ -53,7 +43,7 @@ function redirect( $atts = array() ) {
 	), $atts);
 
 	if( !empty($atts['url']) )
-	wp_safe_redirect( $atts['url'] );
+	wp_redirect( $atts['url'] );
 	exit;
 
 }
@@ -884,8 +874,8 @@ function process_pupil_attendance() {
       $course_id = sanitize_text_field($_GET['course-id']);
 
       $course = new Course($course_id);
-
-      if (!$course->check_section_id_match( $section_id )) {
+      $section = $course->check_section_id_match($section_id);
+      if (!$section) {
           // If it doesn't match, display an error message
           display_message_overlay('<p>Error: Invalid QR code for this course.</p>');
           return;
@@ -926,7 +916,7 @@ function process_pupil_attendance() {
           return;
       }
 
-      if( $course->check_section_is_end_survey($section_id) ){
+      if( $section['type'] == 'end_survey' ){
         $course->save_survey_form_data($user_id, $_POST);
       }
 
@@ -959,11 +949,11 @@ function process_pupil_attendance() {
         }
       }
 
-    } elseif( $course->check_section_is_end_survey($section_id) ){
-      $course->display_end_survey($section_id, $course_id);
+    } elseif( $section['type'] == 'end_survey' ){
+      $course->display_end_survey($section);
     } else{
       // Display the form to enter the registration number
-      display_registration_form($section_id, $course_id);
+      $course->display_registration_form($section);
     }
   }
 }
@@ -1113,93 +1103,6 @@ function calculate_attendance_status($attendance_data) {
     } else {
         return 'partially_attended';
     }
-}
-
-function display_registration_form($section_id, $course_id) {
-    ?>
-    <style>
-        label {
-          display: inline-block;
-          line-height: 2!important;
-          text-align: left;
-          width: 100%;
-        }
-        /* Full-screen overlay */
-        #registration-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 1);
-            z-index: 9999; /* Make sure it's on top of everything */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* Form styling */
-        #registration-form {
-            width: 500px;
-            background-color: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            text-align: center;
-        }
-
-        /* Input and button styling */
-        #registration-form input[type="text"],
-        #registration-form input[type="submit"] {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-
-        #registration-form input[type="submit"] {
-            background-color: #0073aa;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-
-        #registration-form input[type="submit"]:hover {
-            background-color: #005177;
-        }
-    </style>
-
-    <div id="registration-overlay">
-        <form id="registration-form" method="post" action="">
-            <h2>Sign In/Out</h2>
-            <label for="registration_email">Registration Email:</label><br>
-            <input type="email" id="registration_email" name="registration_email" required><br>
-            <input type="hidden" name="section_id" value="<?php echo esc_attr($section_id); ?>">
-            <input type="hidden" name="course_id" value="<?php echo esc_attr($course_id); ?>">
-            <input id="submit" type="submit" value="Submit">
-        </form>
-    </div>
-    <script type="text/javascript">
-        document.addEventListener('DOMContentLoaded', function () {
-            var submitButton = document.getElementById('submit');
-
-            // Show the survey form when Next button is clicked
-            submitButton.addEventListener('click', function (e) {
-                var regEmail = document.getElementById('registration_email').value.trim();
-                if (regEmail === '') {
-                    showMessage('error','Please enter your registration email.');
-                    e.preventDefault();
-                }
-
-            });
-
-        });
-
-
-    </script>
-
-    <?php
 }
 
 //Use in quiz and survey so display message

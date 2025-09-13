@@ -320,19 +320,21 @@ function order_completed_register_pupil_to_course($order_id, $old_status, $new_s
       $enrollment_id = get_user_enrollment_id($user_id, $course_id);
       if( $enrollment_id ){
         $enrollment = new Enrollment($enrollment_id);
-        if( $enrollment->status == 'waiting_list' ){
+        if( $enrollment->status == 'waiting_list' || $enrollment->status == 'on_hold' ){
           $course->set_attendance_record($user_id);
           $enrollment->set('amount',$item->get_total());
+          set_transient('debug', 'fired, status: '.$status, 30);
           $enrollment->set('status',$status);
           $enrollment->set('order_id',$order_id);
           $enrollment->set('payment_method',$order->get_payment_method_title());
           $enrollment->set('uploads',wc_get_order_item_meta( $item_id, 'uploads'));
           $enrollment->set('certificate_status','not_issue');
-        } elseif( $enrollment->status == 'on_hold' ){
-          $enrollment->set('status','enrolled');
+        } else{
+          // User already enrolled or pending or rejected, do nothing.
+          continue;
         }
       } else{
-        $enrollment = $course->enroll($user_id,$status); // enrollment status: enrolled, awaiting_approval, pending, waiting_list, rejected, on-hold
+        $enrollment = $course->enroll($user_id,$status); // enrollment status: enrolled, awaiting_approval, pending, waiting_list, rejected, on_hold
         $course->set_attendance_record($user_id);
         $enrollment->set('amount',$item->get_total());
         $enrollment->set('order_id',$order_id);
@@ -347,7 +349,7 @@ function order_completed_register_pupil_to_course($order_id, $old_status, $new_s
           $course->trigger_enrolled_email($user_id);
           break;
         case 'awaiting_approval':
-          $course->trigger_pending_email($user_id);
+          $course->trigger_awaiting_approval_email($user_id);
           break;
         case 'pending':
           $course->trigger_pending_email($user_id);

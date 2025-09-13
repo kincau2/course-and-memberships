@@ -1,7 +1,7 @@
 <?php
 /**
  * @link              https://www.fromdb.com/
- * @since             1.0.0
+ * @since             1.1.0
  * @package           hkota_course
  *
  * Plugin Name: HKOTA Courses and Memberships

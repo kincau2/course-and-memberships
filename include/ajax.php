@@ -756,22 +756,22 @@ function save_pupil_enrollment_data() {
 			if ($result !== false) {
 
 				// Enrollment completed, now send email base on enrollment status
-	      switch($enrollment_status){
-	        case 'enrolled':
-	          $course->trigger_enrolled_email($user_id);
-	          break;
-	        case 'awaiting_approval':
-	          $course->trigger_pending_email($user_id);
-	          break;
-	        case 'pending':
-	          $course->trigger_pending_email($user_id);
-	          break;
+				switch($enrollment_status){
+					case 'enrolled':
+						$course->trigger_enrolled_email($user_id);
+						break;
+					case 'awaiting_approval':
+						$course->trigger_awaiting_approval_email($user_id);
+						break;
+					case 'pending':
+						$course->trigger_pending_email($user_id);
+						break;
 					case 'rejected':
-		        $course->trigger_admin_rejected_email($user_id);
-		        break;
-	      }
+						$course->trigger_admin_rejected_email($user_id);
+						break;
+				}	
 				$is_updated_enrollment_status = true;
-	    }
+			}
 		}
 
 		if( $is_updated_attendance_status && $is_updated_enrollment_status ){
@@ -2383,108 +2383,131 @@ function resend_certificate_email() {
     }
 }
 
-add_action('wp_ajax_bulk_edit_pupils', 'bulk_edit_pupils');
-
-function bulk_edit_pupils() {
-    global $wpdb;
-    
+// Single pupil edit for sequential processing
+add_action('wp_ajax_bulk_edit_single_pupil', 'bulk_edit_single_pupil');
+function bulk_edit_single_pupil() {
     // Security check
     if (!current_user_can('edit_course')) {
         wp_send_json_error(['message' => 'Insufficient permissions.']);
     }
 
-    $pupil_ids = isset($_POST['pupil_ids']) ? array_map('intval', $_POST['pupil_ids']) : [];
+    $pupil_id = intval($_POST['pupil_id']);
     $course_id = intval($_POST['course_id']);
     $enrollment_status = sanitize_text_field($_POST['enrollment_status']);
     $attendance_status = sanitize_text_field($_POST['attendance_status']);
 
-    if (empty($pupil_ids) || !$course_id) {
-        wp_send_json_error(['message' => 'Invalid pupil IDs or course ID.']);
+    if (!$pupil_id || !$course_id) {
+        wp_send_json_error(['message' => 'Invalid pupil ID or course ID.']);
     }
 
     if (empty($enrollment_status) && empty($attendance_status)) {
         wp_send_json_error(['message' => 'No changes specified.']);
     }
 
-    $table_name = $wpdb->prefix . 'hkota_course_enrollment';
-    $course = new Course($course_id);
-    $updated_count = 0;
-    $errors = [];
+    // Get user information
+    $user = get_user_by('ID', $pupil_id);
 
-    foreach ($pupil_ids as $user_id) {
-        try {
-            $enrollment_id = get_user_enrollment_id($user_id, $course_id);
-            
-            if (!$enrollment_id) {
-                $errors[] = "User ID $user_id is not enrolled in this course.";
-                continue;
-            }
+	if( !$user ){
+		wp_send_json_error(['message' => 'User not found.']);
+	}
 
-            $enrollment = new Enrollment($enrollment_id);
-            $update_data = [];
+    $user_name = $user->display_name;
+    $user_email = $user->user_email;
 
-            // Update enrollment status if provided
-            if (!empty($enrollment_status)) {
-                $current_status = $enrollment->status;
-                $update_data['status'] = $enrollment_status;
-                
-                // Handle enrollment status changes - only send emails if status is actually changing
-                if ($current_status !== $enrollment_status) {
-                    switch ($enrollment_status) {
-                        case 'enrolled':
-                            $course->trigger_enrolled_email($user_id);
-                            break;
-                        case 'rejected':
-                            $course->trigger_rejected_email($user_id);
-                            break;
-                    }
-                }
-            }
+    try {
+        $enrollment_id = get_user_enrollment_id($pupil_id, $course_id);
+        
+        if (!$enrollment_id) {
+            wp_send_json_error([
+                'message' => 'User is not enrolled in this course.',
+                'user_name' => $user_name,
+                'user_email' => $user_email
+            ]);
+        }
 
-            // Update attendance status if provided
-            if (!empty($attendance_status)) {
-                $current_attendance = maybe_unserialize($enrollment->attendance);
-                if (!is_array($current_attendance)) {
-                    $current_attendance = [];
-                }
-                $current_attendance_status = isset($current_attendance['attendance_status']) ? $current_attendance['attendance_status'] : '';
-                $current_attendance['attendance_status'] = $attendance_status;
-                $update_data['attendance'] = maybe_serialize($current_attendance);
-                
-                // Handle certificate generation for fully attended - only if status is changing
-                if ($attendance_status === 'fully_attended' && $current_attendance_status !== 'fully_attended' && $course->type === 'training') {
-                    $result = $course->create_certificate($user_id);
-                    if ($result) {
-                        $course->trigger_issue_certificate_email($user_id);
-                    }
-                }
-            }
+        $enrollment = new Enrollment($enrollment_id);
+        $course = new Course($course_id);
+        
+        // Track changes for response
+        $is_updated_attendance_status = false;
+        $is_updated_enrollment_status = false;
 
-            // Perform the update
-            if (!empty($update_data)) {
-                $where = ['id' => $enrollment_id];
-                $result = $wpdb->update($table_name, $update_data, $where);
-                
-                if ($result !== false) {
-                    $updated_count++;
+        // Update attendance status if provided and different from current
+        if (!empty($attendance_status) && isset($enrollment->attendance['attendance_status']) && $attendance_status !== $enrollment->attendance['attendance_status']) {
+            if ($enrollment->status == 'enrolled' || (!empty($enrollment_status) && $enrollment_status == 'enrolled')) {
+                if (empty($enrollment->attendance)) {
+                    $course->set_attendance_record($pupil_id);
                 } else {
-                    $errors[] = "Failed to update user ID $user_id.";
+                    $attendance = $enrollment->attendance;
+                    $attendance['attendance_status'] = $attendance_status;
+                    $enrollment->set('attendance', $attendance);
+                    if ($attendance_status == 'fully_attended') {
+                        $result = $course->create_certificate($pupil_id);
+                        if ($result) {
+                            $course->trigger_issue_certificate_email($pupil_id);
+                        }
+                    }
                 }
             }
-
-        } catch (Exception $e) {
-            $errors[] = "Error updating user ID $user_id: " . $e->getMessage();
+            $is_updated_attendance_status = true;
         }
-    }
 
-    if ($updated_count > 0) {
-        $message = "Successfully updated $updated_count pupil(s).";
-        if (!empty($errors)) {
-            $message .= " Errors: " . implode(', ', $errors);
+        // Update enrollment status if provided and different from current
+        if (!empty($enrollment_status) && $enrollment_status !== $enrollment->status) {
+            $result = $enrollment->set('status', $enrollment_status);
+            if ($result !== false) {
+                // Send email based on enrollment status
+                switch ($enrollment_status) {
+                    case 'enrolled':
+                        $course->trigger_enrolled_email($pupil_id);
+                        break;
+                    case 'awaiting_approval':
+                        $course->trigger_awaiting_approval_email($pupil_id);
+                        break;
+                    case 'pending':
+                        $course->trigger_pending_email($pupil_id);
+                        break;
+                    case 'rejected':
+                        $course->trigger_admin_rejected_email($pupil_id);
+                        break;
+                }
+                $is_updated_enrollment_status = true;
+            }
         }
-        wp_send_json_success(['message' => $message]);
-    } else {
-        wp_send_json_error(['message' => 'No pupils were updated. ' . implode(', ', $errors)]);
+
+        // Return appropriate response based on what was updated
+        if ($is_updated_attendance_status && $is_updated_enrollment_status) {
+            wp_send_json_success([
+                'message' => 'Enrollment and attendance status updated.',
+                'user_name' => $user_name,
+                'user_email' => $user_email
+            ]);
+        } elseif ($is_updated_enrollment_status) {
+            wp_send_json_success([
+                'message' => 'Enrollment status updated.',
+                'user_name' => $user_name,
+                'user_email' => $user_email
+            ]);
+        } elseif ($is_updated_attendance_status) {
+            wp_send_json_success([
+                'message' => 'Attendance status updated.',
+                'user_name' => $user_name,
+                'user_email' => $user_email
+            ]);
+        } else {
+            wp_send_json_success([
+                'message' => 'Data not saved. You have made no change.',
+                'user_name' => $user_name,
+                'user_email' => $user_email
+            ]);
+        }
+
+    } catch (Exception $e) {
+        wp_send_json_error([
+            'message' => 'Error: ' . $e->getMessage(),
+            'user_name' => $user_name,
+            'user_email' => $user_email
+        ]);
     }
 }
 
@@ -2577,5 +2600,256 @@ function fetch_attendance_details() {
     ];
     
     wp_send_json_success($response_data);
+}
+
+add_action('wp_ajax_search_users_for_course_enrollment', 'search_users_for_course_enrollment');
+
+// Search users for course enrollment (admin only)
+function search_users_for_course_enrollment() {
+    // Check admin permissions
+    if (!current_user_can('edit_course')) {
+        wp_send_json_error('Insufficient permissions.');
+        return;
+    }
+
+    $search_term = sanitize_text_field($_POST['search_term']);
+    $course_id = intval($_POST['course_id']);
+
+    if (empty($search_term) || strlen($search_term) < 2) {
+        wp_send_json_success([]);
+        return;
+    }
+
+    global $wpdb;
+    
+    // Get users already enrolled in this course to exclude them
+    $enrolled_users = $wpdb->get_col($wpdb->prepare(
+        "SELECT user_id FROM {$wpdb->prefix}hkota_course_enrollment WHERE course_id = %d",
+        $course_id
+    ));
+
+    $exclude_ids = !empty($enrolled_users) ? implode(',', array_map('intval', $enrolled_users)) : '0';
+
+    // Search users by email or display name
+    $users = $wpdb->get_results($wpdb->prepare(
+        "SELECT ID, user_email, display_name, user_login 
+         FROM {$wpdb->users} 
+         WHERE (user_email LIKE %s OR display_name LIKE %s OR user_login LIKE %s)
+         AND ID NOT IN ($exclude_ids)
+         ORDER BY display_name ASC 
+         LIMIT 15",
+        '%' . $search_term . '%',
+        '%' . $search_term . '%',
+        '%' . $search_term . '%'
+    ));
+
+    $suggestions = [];
+    foreach ($users as $user) {
+        $user_meta = get_user_meta($user->ID);
+        $first_name = isset($user_meta['first_name'][0]) ? $user_meta['first_name'][0] : '';
+        $last_name = isset($user_meta['last_name'][0]) ? $user_meta['last_name'][0] : '';
+        
+        $suggestions[] = [
+            'id' => $user->ID,
+            'user_email' => $user->user_email,
+            'display_name' => $user->display_name,
+            'first_name' => $first_name,
+            'last_name' => $last_name,
+            'full_name' => trim($first_name . ' ' . $last_name) ?: $user->display_name
+        ];
+    }
+    set_transient('debug', $suggestions, 30);
+    wp_send_json_success($suggestions);
+}
+
+add_action('wp_ajax_handle_admin_create_order_for_course', 'handle_admin_create_order_for_course');
+
+// Create orders for multiple users and enroll them with payment required
+function handle_admin_create_order_for_course() {
+    // Check admin permissions
+    if (!current_user_can('edit_course')) {
+        wp_send_json_error('Insufficient permissions.');
+        return;
+    }
+
+    $user_ids = array_map('intval', $_POST['user_ids']);
+    $course_id = intval($_POST['course_id']);
+    // Properly handle boolean from JavaScript - check for truthy string values
+    $is_waiting_list_acceptance = isset($_POST['is_waiting_list_acceptance']) && 
+                                  in_array($_POST['is_waiting_list_acceptance'], ['true', '1', 1, true], true);
+	
+    if (empty($user_ids) || empty($course_id)) {
+        wp_send_json_error('Invalid user IDs or course ID.');
+        return;
+    }
+
+    $course = new Course($course_id);
+    $dummy_product_id = get_dummy_product_id();
+    
+    if (!$dummy_product_id) {
+        wp_send_json_error('Course product not found.');
+        return;
+    }
+
+    $results = [];
+    $success_count = 0;
+    $error_count = 0;
+
+    foreach ($user_ids as $user_id) {
+        $user = get_user_by('ID', $user_id);
+        if (!$user) {
+            $results[] = [
+                'user_id' => $user_id,
+                'success' => false,
+                'message' => 'User not found.'
+            ];
+            $error_count++;
+            continue;
+        }
+
+        // For waiting list acceptance, check current enrollment status
+        $existing_enrollment_id = get_user_enrollment_id($user_id, $course_id);
+        if ($is_waiting_list_acceptance) {
+            if (!$existing_enrollment_id) {
+                $results[] = [
+                    'user_id' => $user_id,
+                    'user_email' => $user->user_email,
+                    'user_name' => $user->display_name,
+                    'success' => false,
+                    'message' => 'User is not enrolled in this course.'
+                ];
+                $error_count++;
+                continue;
+            }
+            
+            // Check if user is currently on waiting list
+            $existing_enrollment = new Enrollment($existing_enrollment_id);
+            if ($existing_enrollment->status !== 'waiting_list') {
+                $results[] = [
+                    'user_id' => $user_id,
+                    'user_email' => $user->user_email,
+                    'user_name' => $user->display_name,
+                    'success' => false,
+                    'message' => 'User is not on waiting list.'
+                ];
+                $error_count++;
+                continue;
+            }
+        } else {
+            // For regular admin enrollment, check if user is already enrolled
+            if ($existing_enrollment_id) {
+                $results[] = [
+                    'user_id' => $user_id,
+                    'user_email' => $user->user_email,
+                    'user_name' => $user->display_name,
+                    'success' => false,
+                    'message' => 'User already enrolled in this course.'
+                ];
+                $error_count++;
+                continue;
+            }
+        }
+
+        try {
+            // Create WooCommerce order
+            $order = wc_create_order([
+                'customer_id' => $user_id,
+                'status' => 'pending'
+            ]);
+
+            if (is_wp_error($order)) {
+                throw new Exception('Failed to create order: ' . $order->get_error_message());
+            }
+
+            // Add course product to order
+            $course_fee = $course->get_user_course_fee($user_id);
+            $order->add_product(wc_get_product($dummy_product_id), 1, [
+                'subtotal' => $course_fee,
+                'total' => $course_fee
+            ]);
+
+            // Add course metadata to order
+            foreach ($order->get_items() as $item_id => $item) {
+                $item->add_meta_data('course_id', $course_id);
+                $item->add_meta_data('course_title', $course->title);
+                $item->add_meta_data('course_code', $course->code);
+                $item->add_meta_data('date', $course->createDateString());
+                $item->add_meta_data('time', $course->createTimeString());
+                $item->add_meta_data('cpd_point', $course->cpd_point);
+                $item->save();
+            }
+
+            // Set order total and add admin flag
+            $order->calculate_totals();
+            $order->update_meta_data('_admin_created_course_order', true);
+            $order->save();
+
+            // Handle enrollment based on type
+            if ($is_waiting_list_acceptance) {
+                // Update existing enrollment from waiting_list to on_hold
+                $enrollment = new Enrollment($existing_enrollment_id);
+                $enrollment->set('status', 'on_hold');
+                $enrollment->set('payment_method', 'admin_created');
+            } else {
+                // Create new enrollment record with on_hold status
+                $enrollment = $course->enroll($user_id, 'on_hold');
+                if ($enrollment) {
+                    $enrollment->set('payment_method', 'admin_created');
+                    $enrollment->set('certificate_status', 'not_issue');
+                }
+            }
+			
+            // Handle free vs paid courses differently
+            if ($course_fee == 0 || !$course_fee ) {
+                // Free course - auto complete order to trigger enrollment hooks
+                $order->update_status('completed', 'Auto-completed for free course');
+                $order->save();
+
+                $results[] = [
+                    'user_id' => $user_id,
+                    'user_email' => $user->user_email,
+                    'user_name' => $user->display_name,
+                    'success' => true,
+                    'order_id' => $order->get_id(),
+                    'payment_url' => null, // No payment needed for free courses
+                    'email_sent' => false, // No payment email for free courses
+                    'message' => 'User enrolled successfully (free course).'
+                ];
+            } else {
+                // Paid course - send payment request email
+                $payment_url = $order->get_checkout_payment_url();
+                $email_sent = $course->trigger_payment_request_email($user_id, $order->get_id());
+                
+                $results[] = [
+                    'user_id' => $user_id,
+                    'user_email' => $user->user_email,
+                    'user_name' => $user->display_name,
+                    'success' => true,
+                    'order_id' => $order->get_id(),
+                    'payment_url' => $payment_url,
+                    'email_sent' => $email_sent,
+                    'message' => 'Order created and payment email sent successfully.'
+                ];
+            }
+            $success_count++;
+			
+        } catch (Exception $e) {
+            $results[] = [
+                'user_id' => $user_id,
+                'user_email' => $user->user_email,
+                'user_name' => $user->display_name,
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ];
+            $error_count++;
+        }
+    }
+
+    wp_send_json_success([
+        'results' => $results,
+        'success_count' => $success_count,
+        'error_count' => $error_count,
+        'total_processed' => count($user_ids)
+    ]);
 }
 ?>

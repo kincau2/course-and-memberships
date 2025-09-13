@@ -1,7 +1,6 @@
 <?php
 
 include dirname(__FILE__) . '/edit-course-metaboxes.php' ;
-include dirname(__FILE__) . '/view-course-status.php' ;
 include dirname(__FILE__) . '/class-course.php' ;
 include dirname(__FILE__) . '/class-enrollment.php' ;
 include dirname(__FILE__) . '/class-hkota-membership.php' ;
@@ -454,18 +453,3 @@ function maybe_create_protect_files_htaccess() {
     }
 
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-?>

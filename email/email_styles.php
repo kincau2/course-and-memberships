@@ -22,7 +22,7 @@ body {
     width: 230px!important;
 }
 h1 {
-    font-size: 22px;
+    font-size: 18px;
     color: #333333;
     text-align: center;
     margin-bottom: 40px;
@@ -117,7 +117,7 @@ a.ical {
         margin:unset!important;
     }
     h1 {
-        font-size: 22px;
+        font-size: 18px;
     }
     p {
         font-size: 17px;

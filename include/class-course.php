@@ -40,7 +40,7 @@ class Course {
   public $is_member_only;
   public $is_uploads_required;
   public $cert_requirment;
-	public $min_years;
+  public $min_years;
   public $is_co_organized;
   public $co_organizer_title;
   public $co_organizer_logo;
@@ -1133,12 +1133,12 @@ class Course {
 
   }
 
-  // Check if any section in $rundown has the matching ID
+  // Check if any section in $rundown has the matching ID, return the section if found
   public function check_section_id_match( $section_id ) {
     // Loop through the rundown to check if any section has the matching ID
     foreach ( $this->rundown as $section) {
         if ($section['id'] == $section_id) {
-            return true; // Found a matching section ID
+            return $section;
         }
     }
     return false; // No matching section ID found
@@ -1153,17 +1153,6 @@ class Course {
         }
     }
     return false; // No matching section ID found
-  }
-
-  // Check if any sections type is end_survey
-  public function check_section_is_end_survey($section_id) {
-    // Loop through the rundown to check if any section has the matching ID
-    foreach ($this->rundown as $section) {
-        if ($section['id'] == $section_id && $section['type'] == 'end_survey') {
-            return true;
-        }
-    }
-    return false;
   }
 
   // Add button to show pupil details in the frontend
@@ -1223,6 +1212,99 @@ class Course {
         margin: 20px 0;
         font-size: 20px;
         font-weight: 600;
+      }
+      
+      /* Admin Enrollment Section */
+      .admin-enrollment-section {
+        background: #f9f9f9;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #ddd;
+      }
+      
+      .user-search-container {
+        margin-bottom: 15px;
+      }
+      
+      .user-search-container label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+      
+      #user-search-input {
+        width: 100%;
+        max-width: 400px;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      
+      .user-suggestions-list {
+        max-width: 400px;
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        border-top: none;
+        background: white;
+        position: relative;
+        z-index: 1000;
+      }
+      
+      .user-suggestion-item {
+        padding: 10px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+      }
+      
+      .user-suggestion-item:hover {
+        background: #f5f5f5;
+      }
+      
+      .user-suggestion-item:last-child {
+        border-bottom: none;
+      }
+      
+      .selected-users-container label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 5px;
+      }
+      
+      .selected-users-tags {
+        min-height: 40px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        padding: 5px;
+        background: white;
+      }
+      
+      .user-tag {
+        display: inline-block;
+        background: #0073aa;
+        color: white;
+        padding: 5px 10px;
+        margin: 2px;
+        border-radius: 15px;
+        font-size: 12px;
+      }
+      
+      .user-tag .remove-user {
+        margin-left: 8px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      
+      .user-tag .remove-user:hover {
+        color: #ff6b6b;
+      }
+      
+      .enrollment-actions {
+        text-align: right;
+      }
+      
+      .enrollment-actions .button {
+        margin-left: 10px;
       }
       #pupil-details-table {
         width: 100%;
@@ -1316,6 +1398,33 @@ class Course {
         <div id="pupil-details-popup" class="pupil-popup-overlay" style="display:none;">
             <div class="popup-content">
                 <h2>Pupil Details</h2>
+                
+                <!-- Admin Enrollment Section -->
+                <div class="admin-enrollment-section" style="margin-bottom: 20px;">
+                    <button type="button" class="button button-secondary" id="add-candidate-payment-btn" data-course-id="<?php echo $this->id; ?>">
+                        Add Candidate (Payment Required)
+                    </button>
+                    <p>If course is free for a user, no payment link will be sent. please make sure course fee is set correctly.</p>
+                    <!-- User Selection Dropdown -->
+                    <div id="user-selection-dropdown" style="display:none; margin-top: 15px;">
+                        <div class="user-search-container">
+                            <label for="user-search-input">Search Users:</label>
+                            <input type="text" id="user-search-input" placeholder="Type name or email..." style="width: 300px; margin-bottom: 10px;">
+                            <div id="user-suggestions" class="user-suggestions-list" style="display:none;"></div>
+                        </div>
+                        
+                        <div class="selected-users-container">
+                            <label>Selected Users:</label>
+                            <div id="selected-users-tags" class="selected-users-tags"></div>
+                        </div>
+                        
+                        <div class="enrollment-actions" style="margin-top: 15px;">
+                            <button type="button" class="button button-primary" id="confirm-enrollment">Create Orders & Send Payment Links</button>
+                            <button type="button" class="button" id="cancel-enrollment">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+                
                 <table id="pupil-details-table" class="tablesorter" data-course-id="<?php echo $this->id?>">
                     <thead>
                         <tr>
@@ -1342,7 +1451,7 @@ class Course {
   }
 
   // function to display end survey
-  public function display_end_survey($section_id) {
+  public function display_end_survey($section) {
     ?>
     <style>
       /* Full-screen overlay */
@@ -1422,10 +1531,10 @@ class Course {
             <!-- First Part: Sign In/Out Form -->
             <form method="post">
               <div id="part-one">
-                <h2>Sign In/Out</h2>
+                <h2>Sign out section & End ccourse survey </h2>
                 <label for="registration_email">Registration Email:</label><br>
                 <input type="email" id="registration_email" name="registration_email" required><br>
-                <input type="hidden" name="section_id" value="<?php echo esc_attr($section_id); ?>">
+                <input type="hidden" name="section_id" value="<?php echo esc_attr($section['id']); ?>">
                 <input type="hidden" name="course_id" value="<?php echo esc_attr($this->id); ?>">
                 <button type="button" id="next-button">Next</button>
               </div>
@@ -1511,6 +1620,104 @@ class Course {
     </script>
     <?php
   }
+
+  public function display_registration_form($section) {
+    ?>
+    <style>
+        label {
+          display: inline-block;
+          line-height: 2!important;
+          text-align: left;
+          width: 100%;
+        }
+        /* Full-screen overlay */
+        #registration-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 1);
+            z-index: 9999; /* Make sure it's on top of everything */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Form styling */
+        #registration-form {
+            width: 500px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        /* Input and button styling */
+        #registration-form input[type="text"],
+        #registration-form input[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #registration-form input[type="submit"] {
+            background-color: #0073aa;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        #registration-form input[type="submit"]:hover {
+            background-color: #005177;
+        }
+    </style>
+    <?php
+      $display_text;
+      switch ($section['type']) {
+          case 'registration':
+              $display_text = 'Sign In';
+              break;
+          case 'end':
+              $display_text = 'Sign Out';
+              break;
+      }
+    ?>
+    <div id="registration-overlay">
+        <form id="registration-form" method="post" action="">
+            <h2><?php echo esc_html($display_text). ' section'; ?></h2>
+            <p><?php echo esc_html($section['date']) . ' ' . esc_html($section['startTime']); ?></p>
+            <label for="registration_email">Registration Email:</label><br>
+            <input type="email" id="registration_email" name="registration_email" required><br>
+            <input type="hidden" name="section_id" value="<?php echo esc_attr($section['id']); ?>">
+            <input type="hidden" name="course_id" value="<?php echo esc_attr($this->id); ?>">
+            <input id="submit" type="submit" value="Submit">
+        </form>
+    </div>
+    <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function () {
+            var submitButton = document.getElementById('submit');
+
+            // Show the survey form when Next button is clicked
+            submitButton.addEventListener('click', function (e) {
+                var regEmail = document.getElementById('registration_email').value.trim();
+                if (regEmail === '') {
+                    showMessage('error','Please enter your registration email.');
+                    e.preventDefault();
+                }
+
+            });
+
+        });
+
+
+    </script>
+
+    <?php
+}
 
   // function to save end survey data
   public function save_survey_form_data($user_id, $survey_data) {
@@ -1850,7 +2057,7 @@ class Course {
         return false; // Course is not published or private, return false
     }
 
-    // check if user cert already issued then check if user is enrolled and has fully attended the course
+    // check if user cert already issued then check if user has enrollment data and has fully attended the course
     $table_name = $wpdb->prefix . 'hkota_course_enrollment';
     $enrollment_data = $wpdb->get_row($wpdb->prepare(
         "SELECT * FROM $table_name WHERE user_id = %d AND course_id = %d", $user_id, $this->id
@@ -2134,16 +2341,16 @@ class Course {
     if(!$results) return;
 
     foreach ($results as $result) {
-      $user = get_user_by('ID',$result->user_id);
-      // Send the email
-      $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+        $user = get_user_by('ID',$result->user_id);
+        // Send the email
+        $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
 
-      if ( ! $sent ) {
+        if ( ! $sent ) {
           // Handle email not sent, you could log the error here
-          error_log( 'Email failed to send to ' . $to );
-      }
+          error_log( 'Email failed to send to ' . $user->user_email );
+        } 
     }
-  }
+}
 
   // Sent email to user about his course status is enrolled
   public function trigger_enrolled_email($user_id) {
@@ -2168,8 +2375,10 @@ class Course {
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
-        error_log( 'Email failed to send to ' . $to );
+        error_log( 'Email failed to send to ' . $user->user_email );
+        return false;
     }
+    return true;
 
   }
 
@@ -2196,8 +2405,10 @@ class Course {
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
-        error_log( 'Email failed to send to ' . $to );
+        error_log( 'Email failed to send to ' . $user->user_email );
+        return false;
     }
+    return true;
   }
 
   // Sent email to user about his course status is pending
@@ -2223,8 +2434,10 @@ class Course {
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
-        error_log( 'Email failed to send to ' . $to );
+        error_log( 'Email failed to send to ' . $user->user_email );
+        return false;
     }
+    return true;
   }
 
   // Sent email to user about his course status is rejected (status set by corn job)
@@ -2250,9 +2463,10 @@ class Course {
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
-        error_log( 'Email failed to send to ' . $to );
-
+        error_log( 'Email failed to send to ' . $user->user_email );
+        return false;
     }
+    return true;
   }
 
   // Sent email to user about his course status is rejected (status set by admin on beckend)
@@ -2278,9 +2492,10 @@ class Course {
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
-        error_log( 'Email failed to send to ' . $to );
-
+        error_log( 'Email failed to send to ' . $user->user_email );
+        return false;
     }
+    return true;
   }
 
   public function new_waiting_list_email($user_id){
@@ -2306,8 +2521,10 @@ class Course {
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
-        error_log( 'Email failed to send to ' . $to );
+        error_log( 'Email failed to send to ' . $user->user_email );
+        return false;
     }
+    return true;
 
   }
 
@@ -2334,8 +2551,10 @@ class Course {
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
-        error_log( 'Email failed to send to ' . $to );
+        error_log( 'Email failed to send to ' . $user->user_email );
+        return false;
     }
+    return true;
 
   }
 
@@ -2360,10 +2579,51 @@ class Course {
     // Send the email
     $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
 
+
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
-        error_log( 'Email failed to send to ' . $to );
+        error_log( 'Email failed to send to ' . $user->user_email );
+        return false;
     }
+    return true;
+
+  }
+
+  // Sent payment request email to user for admin-created course order
+  public function trigger_payment_request_email($user_id, $order_id) {
+    $headers = array('Content-Type: text/html; charset=UTF-8');
+    $subject = '[HKOTA] Payment Required - Course Registration: ' . $this->title;
+    $user = get_user_by('ID', $user_id);
+    $order = wc_get_order($order_id);
+
+    if (!$user || !$order) {
+        return false;
+    }
+
+    ob_start();
+
+    // Include the PHP file that contains the HTML email structure
+    $args = array(
+        'course' => $this,
+        'user' => $user,
+        'order' => $order,
+        'payment_url' => $order->get_checkout_payment_url()
+    );
+    
+    load_template(HKOTA_PLUGIN_DIR . '/email/course-payment-request.php', true, $args);
+
+    // Get the content from the buffer and clean the buffer
+    $html_content = ob_get_clean();
+    
+    // Send the email
+    $sent = wp_mail($user->user_email, $subject, $html_content, $headers);
+
+    if ( ! $sent ) {
+        // Handle email not sent, you could log the error here
+        error_log( 'Email failed to send to ' . $user->user_email );
+        return false;
+    }
+    return true;
 
   }
 
