@@ -23,7 +23,6 @@ require __DIR__ . '/vendor/autoload.php';
 
 include dirname(__FILE__) . '/include/init.php' ;
 
-
 define('COURSE_FILE_DIR', wp_upload_dir()['basedir'].'/course-files/');
 define('COURSE_POSTER_DIR', wp_upload_dir()['basedir'].'/course-poster/');
 define('COURSE_QR_CODE_DIR', wp_upload_dir()['basedir'].'/course-qr-code/');

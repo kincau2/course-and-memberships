@@ -20,8 +20,10 @@ add_shortcode('debug', 'display_debug_message');
 function display_debug_message(){
 
 	echo "<pre>";
-	echo print_r(get_transient('debug'),1);
+	echo print_r(get_transient('debug').'test',1);
 	echo "</pre>";
+    $course = new Course(6015);
+    $course->trigger_rejected_email(1);
 }
 
 add_shortcode('login-button-message', 'login_button_message');

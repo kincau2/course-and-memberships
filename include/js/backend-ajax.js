@@ -889,7 +889,7 @@ function savingRundown(postID,inputKey,sections,relatedness){
        action: "save_rundown",
        post_id: postID,
        input_key: inputKey,
-       rundown: sections,
+       rundown: JSON.stringify(sections),  // Convert to JSON string
        course_relatedness: relatedness
      },
      success: function(response) {

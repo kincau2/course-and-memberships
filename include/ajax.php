@@ -85,11 +85,11 @@ add_action( 'wp_ajax_save_rundown', 'save_rundown' );
 
 function save_rundown(){
 
-  $post_id = stripslashes($_POST['post_id']);
-  $input_key = stripslashes($_POST['input_key']);
+    $post_id = stripslashes($_POST['post_id']);
+    $input_key = stripslashes($_POST['input_key']);
 	$relatedness = stripslashes($_POST['course_relatedness']);
-  $rundown = $_POST['rundown'];
-
+    $rundown = json_decode(stripslashes($_POST['rundown']), true);
+    
 	if( !empty($rundown) ){
 		if( !is_array($rundown) ){
 			$respond['success'] = false;
@@ -101,49 +101,49 @@ function save_rundown(){
 		});
 	}
 
-  if( update_post_meta( $post_id, $input_key, $rundown ) || update_post_meta( $post_id, 'course_relatedness', $relatedness ) ){
+    if( update_post_meta( $post_id, $input_key, $rundown ) || update_post_meta( $post_id, 'course_relatedness', $relatedness ) ){
 
-		$old_qr_codes = get_post_meta($post_id,'course_qr_code',true);
+            $old_qr_codes = get_post_meta($post_id,'course_qr_code',true);
 
-		if( !empty( $old_qr_codes ) ){
-			foreach ($old_qr_codes as $old_qr_code ) {
-				wp_delete_file( COURSE_QR_CODE_DIR . $old_qr_code['filename'] );
-			}
-		}
+            if( !empty( $old_qr_codes ) ){
+                foreach ($old_qr_codes as $old_qr_code ) {
+                    wp_delete_file( COURSE_QR_CODE_DIR . $old_qr_code['filename'] );
+                }
+            }
 
-		delete_post_meta($post_id,'course_qr_code');
+            delete_post_meta($post_id,'course_qr_code');
 
-		$course = new Course($post_id);
+            $course = new Course($post_id);
 
-		$cpd_point = $course->calculate_cpd_points();
+            $cpd_point = $course->calculate_cpd_points();
 
-		$respond['cpd-point'] = $cpd_point;
+            $respond['cpd-point'] = $cpd_point;
 
-		$return = $course->init_attendance_record();
+            $return = $course->init_attendance_record();
 
-		if( is_wp_error($return) ){
-			$respond['success'] = false;
-			$respond['message_type'] = 'error';
-			$respond['message'] = 'Rundown saved but ' . $return->get_error_message();
-		} else{
-			$respond['success'] = true;
-			$respond['message_type'] = 'notice';
-			$respond['message'] = "Rundown Saved and attendance record initialized.";
-		}
+            $course->save_rundown_dates();
 
-  } else {
+            if( is_wp_error($return) ){
+                $respond['success'] = false;
+                $respond['message_type'] = 'error';
+                $respond['message'] = 'Rundown saved but ' . $return->get_error_message();
+            } else{
+                $respond['success'] = true;
+                $respond['message_type'] = 'notice';
+                $respond['message'] = "Rundown Saved and attendance record initialized.";
+            }
 
-    $respond['success'] = false;
-		$respond['message_type'] = 'warning';
-		$respond['message'] = 'Rundown not saved, you have not make any changes.';
+    } else {
 
-  }
+        $respond['success'] = false;
+        $respond['message_type'] = 'warning';
+        $respond['message'] = 'Rundown not saved, you have not make any changes.';
 
-	$course->save_rundown_dates();
+    }
 
-  echo json_encode($respond);
+    echo json_encode($respond);
 
-  exit();
+    exit();
 
 }
 
