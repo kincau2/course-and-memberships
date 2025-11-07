@@ -34,6 +34,25 @@ function init_plugin(){
 	add_action('admin_init', 'add_courses_capabilities');
 }
 
+// Add HKOTA Audit Report admin menu
+add_action('admin_menu', 'add_hkota_audit_report_menu');
+
+function add_hkota_audit_report_menu() {
+    add_menu_page(
+        'Audit Report',           // Page title
+        'Audit Report',           // Menu title
+        'manage_options',               // Capability required to access
+        'hkota-audit-report',           // Menu slug
+        'hkota_audit_report_page',      // Callback function
+        'dashicons-chart-bar',          // Icon (using WordPress dashicon)
+        6                               // Position (after Posts)
+    );
+}
+
+function hkota_audit_report_page() {
+    include_once HKOTA_PLUGIN_DIR . '/template/audit-report.php';
+}
+
 function create_course_posttype() {
     $args = array(
         'labels'              => array(

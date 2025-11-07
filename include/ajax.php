@@ -652,11 +652,8 @@ function fetch_pupil_details() {
         WHERE ue.course_id = %d
     ", $course_id));
 
-    if (!$results) {
-        wp_send_json_error('No pupils found for this course.');
-    }
-
     $pupils = [];
+    
     $cpd_table = $wpdb->prefix . 'hkota_cpd_records';
     
     foreach ($results as $row) {
@@ -2696,7 +2693,9 @@ function handle_admin_create_order_for_course() {
     $error_count = 0;
 
     foreach ($user_ids as $user_id) {
+
         $user = get_user_by('ID', $user_id);
+
         if (!$user) {
             $results[] = [
                 'user_id' => $user_id,
@@ -2744,6 +2743,20 @@ function handle_admin_create_order_for_course() {
                     'user_name' => $user->display_name,
                     'success' => false,
                     'message' => 'User already enrolled in this course.'
+                ];
+                $error_count++;
+                continue;
+            }
+            
+            // Check if user is eligible for the course
+            $eligibility = $course->get_user_eligibility($user_id);
+            if (!$eligibility['is_eligible']) {
+                $results[] = [
+                    'user_id' => $user_id,
+                    'user_email' => $user->user_email,
+                    'user_name' => $user->display_name,
+                    'success' => false,
+                    'message' => $eligibility['message']
                 ];
                 $error_count++;
                 continue;
