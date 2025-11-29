@@ -41,7 +41,7 @@ function add_hkota_audit_report_menu() {
     add_menu_page(
         'Audit Report',           // Page title
         'Audit Report',           // Menu title
-        'manage_options',               // Capability required to access
+        'view_hkota_report',            // Capability required to access
         'hkota-audit-report',           // Menu slug
         'hkota_audit_report_page',      // Callback function
         'dashicons-chart-bar',          // Icon (using WordPress dashicon)
@@ -105,6 +105,7 @@ function add_courses_capabilities() {
     $role->add_cap('edit_others_courses');
     $role->add_cap('publish_courses');
     $role->add_cap('read_private_courses');
+    $role->add_cap('view_hkota_report');
 }
 
 // Add a course code column to the course listing table
