@@ -2603,6 +2603,12 @@ function my_login_logo() {
 	        	padding-bottom: 30px;
         }
     </style>
+    <script type="text/javascript">
+      document.addEventListener('DOMContentLoaded', function() {
+        document.querySelector('#login h1.wp-login-logo a').href = '<?php echo home_url(); ?>';
+      });
+        
+    </script>
 	<?php
 }
 

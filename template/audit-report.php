@@ -27,12 +27,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['membership_audit_nonc
     
     list($start_date, $end_date) = explode('|', $financial_year);
     
-    // Calculate query start date (6 years back to catch multi-year memberships)
-    $query_start_date = date('Y-m-d', strtotime('-6 years', strtotime($start_date)));
-    
     // Validate date format
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start_date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end_date)) {
         wp_die('Invalid date format');
+    }
+
+    // Calculate query start date (6 years back to catch multi-year memberships)
+    // Done AFTER validation
+    $query_start_date = date('Y-m-d', strtotime('-6 years', strtotime($start_date)));
+    
+    // Increase limits for large reports
+    if (function_exists('set_time_limit')) {
+        set_time_limit(0);
+    }
+    if (function_exists('ini_set')) {
+        ini_set('memory_limit', '1024M');
     }
     
     global $wpdb;
@@ -92,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['membership_audit_nonc
         'Member End Year',
         'Name',
         'Email',
-        'Order Total',
+        'Item Total',
         'Stripe Fee',
         'Stripe Payout',
         'Pro-rata Net Income',
@@ -188,8 +197,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['membership_audit_nonc
                         $user_name = $user->last_name . ', ' . $user->first_name;
                         $user_email = $user->user_email;
                         
-                        // Get order information
-                        $order_total = $order->get_total();
+                        // Get LINE ITEM total instead of order total
+                        $item_total = (float) $item->get_total();
+                        $order_total = (float) $order->get_total();
+                        
                         $payment_date = $order->get_date_paid() ? $order->get_date_paid()->date('Y-m-d') : '';
                         $order_number = $order->get_order_number();
                         $payment_status = $order->get_status();
@@ -200,38 +211,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['membership_audit_nonc
                             $charge_id = $order->get_meta('_transaction_id', true);
                         }
                         
-                        // Calculate Stripe fee (HPOS compatible)
-                        $stripe_fee = $order->get_meta('_stripe_fee', true);
-                        if (empty($stripe_fee)) {
-                            $stripe_fee = $order->get_meta('_payment_fee', true);
+                        // Get total Stripe fee for the order (HPOS compatible)
+                        $order_stripe_fee = $order->get_meta('_stripe_fee', true);
+                        if (empty($order_stripe_fee)) {
+                            $order_stripe_fee = $order->get_meta('_payment_fee', true);
                         }
-                        if (empty($stripe_fee)) {
-                            $stripe_fee = $order->get_meta('_stripe_net', true);
+                        if (empty($order_stripe_fee)) {
+                            $order_stripe_fee = $order->get_meta('_stripe_net', true);
                         }
+                        $order_stripe_fee = (float) $order_stripe_fee;
                         
-                        // Calculate payout (order total - stripe fee)
+                        // Calculate pro-rata Stripe Fee based on item's proportion of order total
+                        $stripe_fee = '';
                         $stripe_payout = '';
                         $net_income = 0;
                         
-                        if (is_numeric($order_total)) {
-                            $fee_val = (!empty($stripe_fee) && is_numeric($stripe_fee)) ? $stripe_fee : 0;
-                            $net_income = $order_total - $fee_val;
-                        }
-
-                        if (!empty($stripe_fee) && is_numeric($stripe_fee) && is_numeric($order_total)) {
-                            $stripe_payout = number_format($order_total - $stripe_fee, 2, '.', '');
+                        if ($order_total > 0 && $order_stripe_fee > 0) {
+                            $item_proportion = $item_total / $order_total;
+                            $stripe_fee = $order_stripe_fee * $item_proportion;
+                            $stripe_payout = $item_total - $stripe_fee;
+                            $net_income = $stripe_payout;
+                            
+                            $stripe_fee = number_format($stripe_fee, 2, '.', '');
+                            $stripe_payout = number_format($stripe_payout, 2, '.', '');
+                        } elseif ($item_total > 0) {
+                            $net_income = $item_total;
                         }
                         
-                        // Calculate Pro-rata Net Income
+                        // Calculate Pro-rata Net Income (divided by membership duration years)
                         $pro_rata_income = '';
-                        if (is_numeric($net_income)) {
+                        if (is_numeric($net_income) && $net_income > 0) {
                              $pro_rata_income = number_format($net_income / $duration_years, 2, '.', '');
                         }
 
-                        // Calculate Pro-rata Stripe Fee
+                        // Calculate Pro-rata Stripe Fee (divided by membership duration years)
                         $pro_rata_stripe_fee = '';
-                        if (is_numeric($stripe_fee) && !empty($stripe_fee)) {
-                             $pro_rata_stripe_fee = number_format($stripe_fee / $duration_years, 2, '.', '');
+                        if (is_numeric($stripe_fee) && !empty($stripe_fee) && $stripe_fee > 0) {
+                             $pro_rata_stripe_fee = number_format((float)$stripe_fee / $duration_years, 2, '.', '');
                         }
                         
                         $csv_data[] = [
@@ -240,7 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['membership_audit_nonc
                             $membership_end_year,
                             $user_name,
                             $user_email,
-                            $order_total,
+                            $item_total,
                             $stripe_fee,
                             $stripe_payout,
                             $pro_rata_income,
@@ -296,12 +312,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['course_audit_nonce'])
     
     list($start_date, $end_date) = explode('|', $financial_year);
     
-    // Calculate query start date (1 year back to catch early course purchases)
-    $query_start_date = date('Y-m-d', strtotime('-1 year', strtotime($start_date)));
-    
     // Validate date format
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start_date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end_date)) {
         wp_die('Invalid date format');
+    }
+
+    // Calculate query start date (1 year back to catch early course purchases)
+    // Done AFTER validation to ensure start_date is valid
+    $query_start_date = date('Y-m-d', strtotime('-1 year', strtotime($start_date)));
+    
+    // Increase limits for large reports
+    if (function_exists('set_time_limit')) {
+        set_time_limit(0);
+    }
+    if (function_exists('ini_set')) {
+        ini_set('memory_limit', '1024M');
     }
     
     global $wpdb;
@@ -361,7 +386,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['course_audit_nonce'])
         'Course Date',
         'Name',
         'Email',
-        'Order Total',
+        'Item Total',
         'Stripe Fee',
         'Stripe Payout',
         'Net Income',
@@ -386,7 +411,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['course_audit_nonce'])
                         // Get course metadata from order item meta
                         $course_id = wc_get_order_item_meta($item_id, 'course_id', true);
                         $course_title = wc_get_order_item_meta($item_id, 'course_title', true);
-                        $course_title = html_entity_decode($course_title, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                        $course_title = html_entity_decode((string)$course_title, ENT_QUOTES | ENT_HTML5, 'UTF-8');
                         $course_code = wc_get_order_item_meta($item_id, 'course_code', true);
                         
                         // Get course dates from course post meta (serialized data)
@@ -399,14 +424,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['course_audit_nonce'])
                         $report_end_ts = strtotime($end_date);
                         
                         if (is_array($course_dates_array) && !empty($course_dates_array)) {
-                            // Sort to get the earliest date
-                            $temp_dates = $course_dates_array;
-                            sort($temp_dates);
-                            $course_start_date = $temp_dates[0];
-                            $course_start_ts = strtotime($course_start_date);
+                            // Convert to timestamps for accurate sorting
+                            $timestamps = array_map('strtotime', $course_dates_array);
+                            // Filter out false values
+                            $timestamps = array_filter($timestamps);
                             
-                            if ($course_start_ts >= $report_start_ts && $course_start_ts <= $report_end_ts) {
-                                $include_in_report = true;
+                            if (!empty($timestamps)) {
+                                sort($timestamps);
+                                $course_start_ts = $timestamps[0];
+                                
+                                if ($course_start_ts >= $report_start_ts && $course_start_ts <= $report_end_ts) {
+                                    $include_in_report = true;
+                                }
                             }
                         } else {
                             // Fallback: if no course dates, use order date
@@ -431,11 +460,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['course_audit_nonce'])
                         $user_name = $user->last_name . ', ' . $user->first_name;
                         $user_email = $user->user_email;
                         
-                        // Get order information
-                        $order_total = $order->get_total();
+                        // Get LINE ITEM total instead of order total
+                        $item_total = (float) $item->get_total();
+                        $order_total = (float) $order->get_total();
+                        
                         $payment_date = $order->get_date_paid() ? $order->get_date_paid()->date('Y-m-d') : '';
                         $order_number = $order->get_order_number();
-                        $payment_status = $order_total ? $order->get_status() : 'Not applicable';
+                        $payment_status = $item_total ? $order->get_status() : 'Not applicable';
                         
                         // Get Stripe data from order meta (HPOS compatible)
                         $charge_id = $order->get_meta('_stripe_charge_id', true);
@@ -443,26 +474,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['course_audit_nonce'])
                             $charge_id = $order->get_meta('_transaction_id', true);
                         }
                         
-                        // Calculate Stripe fee (HPOS compatible)
-                        $stripe_fee = $order->get_meta('_stripe_fee', true);
-                        if (empty($stripe_fee)) {
-                            $stripe_fee = $order->get_meta('_payment_fee', true);
+                        // Get total Stripe fee for the order (HPOS compatible)
+                        $order_stripe_fee = $order->get_meta('_stripe_fee', true);
+                        if (empty($order_stripe_fee)) {
+                            $order_stripe_fee = $order->get_meta('_payment_fee', true);
                         }
-                        if (empty($stripe_fee)) {
-                            $stripe_fee = $order->get_meta('_stripe_net', true);
+                        if (empty($order_stripe_fee)) {
+                            $order_stripe_fee = $order->get_meta('_stripe_net', true);
                         }
+                        $order_stripe_fee = (float) $order_stripe_fee;
                         
-                        // Calculate payout (order total - stripe fee)
+                        // Calculate pro-rata Stripe Fee based on item's proportion of order total
+                        $stripe_fee = '';
                         $stripe_payout = '';
                         $net_income = '';
                         
-                        if (is_numeric($order_total)) {
-                            $fee_val = (!empty($stripe_fee) && is_numeric($stripe_fee)) ? $stripe_fee : 0;
-                            $net_income = number_format($order_total - $fee_val, 2, '.', '');
-                        }
-
-                        if (!empty($stripe_fee) && is_numeric($stripe_fee) && is_numeric($order_total)) {
-                            $stripe_payout = number_format($order_total - $stripe_fee, 2, '.', '');
+                        if ($order_total > 0 && $order_stripe_fee > 0) {
+                            $item_proportion = $item_total / $order_total;
+                            $stripe_fee = $order_stripe_fee * $item_proportion;
+                            $stripe_payout = $item_total - $stripe_fee;
+                            $net_income = number_format($stripe_payout, 2, '.', '');
+                            
+                            $stripe_fee = number_format($stripe_fee, 2, '.', '');
+                            $stripe_payout = number_format($stripe_payout, 2, '.', '');
+                        } elseif ($item_total > 0) {
+                            $net_income = number_format($item_total, 2, '.', '');
                         }
                         
                         $csv_data[] = [
@@ -471,7 +507,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['course_audit_nonce'])
                             $course_date_formatted,
                             $user_name,
                             $user_email,
-                            $order_total,
+                            $item_total,
                             $stripe_fee,
                             $stripe_payout,
                             $net_income,
@@ -525,28 +561,44 @@ $current_day = (int)date('j');
 // If today is after 1 May of current year, current FY starts 1 May of current year
 // If today is before 1 May of current year, current FY starts 1 May of previous year
 if ($current_month > 5 || ($current_month == 5 && $current_day >= 1)) {
-    $latest_start_year = $current_year;
+    $current_fy_start_year = $current_year;
 } else {
-    $latest_start_year = $current_year - 1;
+    $current_fy_start_year = $current_year - 1;
 }
 
 $start_year_data = 2024; // Data starts Oct 2024, so first FY is May 2024 - Apr 2025
-$fy_options = [];
 
-// Ensure we at least have the base year
-if ($latest_start_year < $start_year_data) {
-    $latest_start_year = $start_year_data;
-}
+// Course Options (Future 1 year)
+$course_fy_options = [];
+$course_max_year = $current_fy_start_year + 1;
+if ($course_max_year < $start_year_data) $course_max_year = $start_year_data;
 
-for ($y = $latest_start_year; $y >= $start_year_data; $y--) {
+for ($y = $course_max_year; $y >= $start_year_data; $y--) {
     $start = $y . '-05-01';
     $end = ($y + 1) . '-04-30';
     // Format: 1May2024-30Apr2025
     $label = date('jMY', strtotime($start)) . '-' . date('jMY', strtotime($end));
-    $fy_options[] = [
+    $course_fy_options[] = [
         'value' => $start . '|' . $end,
         'label' => $label,
-        'selected' => ($y === $latest_start_year)
+        'selected' => ($y === $current_fy_start_year)
+    ];
+}
+
+// Membership Options (Future 4 years)
+$membership_fy_options = [];
+$membership_max_year = $current_fy_start_year + 4;
+if ($membership_max_year < $start_year_data) $membership_max_year = $start_year_data;
+
+for ($y = $membership_max_year; $y >= $start_year_data; $y--) {
+    $start = $y . '-05-01';
+    $end = ($y + 1) . '-04-30';
+    // Format: 1May2024-30Apr2025
+    $label = date('jMY', strtotime($start)) . '-' . date('jMY', strtotime($end));
+    $membership_fy_options[] = [
+        'value' => $start . '|' . $end,
+        'label' => $label,
+        'selected' => ($y === $current_fy_start_year)
     ];
 }
 ?>
@@ -569,7 +621,7 @@ for ($y = $latest_start_year; $y >= $start_year_data; $y--) {
                     <div class="date-input-group" style="width: 100%;">
                         <label for="course_financial_year">Financial Year</label>
                         <select id="course_financial_year" name="course_financial_year" class="financial-year-select">
-                            <?php foreach ($fy_options as $option): ?>
+                            <?php foreach ($course_fy_options as $option): ?>
                                 <option value="<?php echo esc_attr($option['value']); ?>" <?php selected($option['selected'], true); ?>>
                                     <?php echo esc_html($option['label']); ?>
                                 </option>
@@ -603,7 +655,7 @@ for ($y = $latest_start_year; $y >= $start_year_data; $y--) {
                     <div class="date-input-group" style="width: 100%;">
                         <label for="membership_financial_year">Financial Year</label>
                         <select id="membership_financial_year" name="membership_financial_year" class="financial-year-select">
-                            <?php foreach ($fy_options as $option): ?>
+                            <?php foreach ($membership_fy_options as $option): ?>
                                 <option value="<?php echo esc_attr($option['value']); ?>" <?php selected($option['selected'], true); ?>>
                                     <?php echo esc_html($option['label']); ?>
                                 </option>
