@@ -518,7 +518,7 @@ function check_course_eligibility() {
 					wp_die();
 				}
 				break;
-			case 'awaiting_approval ':
+			case 'awaiting_approval':
 				wp_send_json_error(['message' => 'Error: You already submitted application on this course, the application status is pending.']);
 				wp_die();
 				break;

@@ -19,11 +19,6 @@ add_shortcode('debug', 'display_debug_message');
 
 function display_debug_message(){
 
-	echo "<pre>";
-	echo print_r(get_transient('debug'),1);
-	echo "</pre>";
-    // $course = new Course(6015);
-    // $course->trigger_rejected_email(1);
 }
 
 add_shortcode('login-button-message', 'login_button_message');
@@ -167,7 +162,7 @@ function course_filter(){
         <div class="select-container">
           <select id="year">
               <option value="">Years</option>
-              <?php for ($i = 2015; $i <= date('Y'); $i++): ?>
+              <?php for ($i = 2015; $i <= date('Y') + 1; $i++): ?>
                   <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
               <?php endfor; ?>
           </select>
@@ -556,7 +551,7 @@ function post_filter(){
         <div class="select-container">
           <select id="year">
               <option value="">Years</option>
-              <?php for ($i = 2015; $i <= date('Y'); $i++): ?>
+              <?php for ($i = 2015; $i <= date('Y') + 1; $i++): ?>
                   <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
               <?php endfor; ?>
           </select>
@@ -651,7 +646,7 @@ function product_filter(){
         <div class="select-container">
           <select id="year">
               <option value="">Years</option>
-              <?php for ($i = 2015; $i <= date('Y'); $i++): ?>
+              <?php for ($i = 2015; $i <= date('Y') + 1; $i++): ?>
                   <option value="<?php echo $i; ?>"><?php echo $i; ?></option>
               <?php endfor; ?>
           </select>
@@ -1207,7 +1202,7 @@ function generate_poster(){
 
 		$dompdf = new Dompdf($options);
 
-		include dirname(__FILE__) . "/poster.php";
+		include HKOTA_PLUGIN_DIR . "/template/poster.php";
 
     $html_content = ob_get_clean();
 
@@ -1478,8 +1473,8 @@ function preview_certificate(){
     'preview'       => true
   );
 
-  load_template( dirname(__FILE__) . "/certificate.php" ,true, $args );
-  // include dirname(__FILE__) . "/certificate.php";
+  load_template( HKOTA_PLUGIN_DIR . "/template/certificate.php" ,true, $args );
+  // include HKOTA_PLUGIN_DIR . "/template/certificate.php";
   $html_content = ob_get_clean();
 
   $dompdf->loadHtml($html_content);

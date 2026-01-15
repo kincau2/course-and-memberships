@@ -1343,8 +1343,17 @@ class Course {
             return false;
         }
 
-        // Set the date issued to the current time
-        $date_issued = current_time('timestamp');
+        // Set the date issued to the last date of the course rundown
+        $date_issued = current_time('timestamp'); // Default to current time
+        if (!empty($this->rundown) && is_array($this->rundown)) {
+            // Sort rundown by date descending to get the last date
+            $rundown_sorted = $this->rundown;
+            usort($rundown_sorted, function($a, $b) {
+                return strtotime($b['date']) - strtotime($a['date']);
+            });
+            $last_date = $rundown_sorted[0]['date'];
+            $date_issued = strtotime($last_date);
+        }
 
         // Generate the certificate PDF
         ob_start();
@@ -1354,7 +1363,7 @@ class Course {
             'course' => $this,
             'date_issued' => $date_issued
         );
-        load_template(dirname(__FILE__) . "/certificate.php", true, $args);
+        load_template(HKOTA_PLUGIN_DIR . "/template/certificate.php", true, $args);
         $html_content = ob_get_clean();
 
         $options = new Options();
