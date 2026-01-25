@@ -246,7 +246,7 @@ color: #000;
         
         <!-- Admin Enrollment Section -->
         <div class="admin-enrollment-section" style="margin-bottom: 20px;">
-            <button type="button" class="button button-secondary" id="add-candidate-payment-btn" data-course-id="<?php // echo $course->id; ?>">
+            <button type="button" class="button button-secondary" id="add-candidate-payment-btn" data-course-id="<?php echo $course->id; ?>">
                 Add Candidate (Payment Required)
             </button>
             <p>If course is free for a user, no payment link will be sent. please make sure course fee is set correctly.</p>
@@ -270,7 +270,7 @@ color: #000;
             </div>
         </div>
         
-        <table id="pupil-details-table" class="tablesorter" data-course-id="<?php // echo $course->id ?>">
+        <table id="pupil-details-table" class="tablesorter" data-course-id="<?php echo $course->id?>">
             <thead>
                 <tr>
                     <th>First Name</th>
