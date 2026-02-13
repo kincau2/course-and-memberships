@@ -2310,12 +2310,29 @@ function fetch_user_cpd_data() {
 
 	if($results){
 		foreach ($results as $result){
+			// Get user information
+			$user_id = $result->user_id;
+			$first_name = get_user_meta($user_id, 'first_name', true);
+			$last_name = get_user_meta($user_id, 'last_name', true);
+			$full_name = !empty($last_name) || !empty($first_name) 
+				? trim($last_name . ', ' . $first_name) 
+				: '';
+			
+			// Get OT registration number (blank if not applicable)
+			$ot_reg_number = get_user_meta($user_id, 'ot_reg_number', true);
+			
+			// Get HKOTA membership number (blank if not applicable)
+			$member_number = get_user_meta($user_id, 'member_number', true);
+			
 			$data[] = array(
-				'Date'					=> $result->date_issued,
-				'Course'				=> $result->title,
-				'Course Code'		=> $result->code,
-				'organization'	=> $result->organization,
-				'CPD Point'			=> $result->cpd_point,
+				'Full Name'			        => $full_name,
+				'OT Registration Number'    => !empty($ot_reg_number) ? $ot_reg_number : '',
+				'HKOTA Membership Number'	=> !empty($member_number) ? $member_number : '',
+				'Date'					    => $result->date_issued,
+				'Course'			    	=> $result->title,
+				'Course Code'		        => $result->code,
+				'Organization'	            => $result->organization,
+				'CPD Point'		        	=> $result->cpd_point,
 			);
 		}
 	}
