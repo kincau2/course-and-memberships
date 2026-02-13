@@ -1306,7 +1306,13 @@ function generate_poster(){
 
     $snapshot_dir = $upload_dir['basedir'].'/course-files';
 
-    generate_poster_snapshot( $outputFilePath , $snapshot_dir, $filename, $course_id );
+    // Try to generate snapshot, but don't fail if it doesn't work
+    $snapshot_result = generate_poster_snapshot( $outputFilePath , $snapshot_dir, $filename, $course_id );
+    
+    // Log if snapshot generation failed
+    if ( $snapshot_result === false ) {
+        error_log('Warning: Failed to generate poster snapshot for course ID ' . $course_id . '. Poster PDF was created successfully.');
+    }
 
     wp_safe_redirect( home_url() . '/wp-content/uploads/course-poster/' . $filename );
 
@@ -1385,61 +1391,122 @@ function inactive_member_csv(){
 
 // Function to get a jpg snapshot of the firstpage of course poster
 function generate_poster_snapshot($pdf_file_path, $output_directory, $filename, $course_id ) {
-    // Check if the Imagick extension is loaded
-    if (!extension_loaded('imagick')) {
-        die('Imagick extension is not installed');
-    }
-
     // Check if the PDF file exists
     if (!file_exists($pdf_file_path)) {
-        die('PDF file does not exist.');
+        error_log('generate_poster_snapshot: PDF file does not exist at: ' . $pdf_file_path);
+        return false;
     }
 
-    // Create an Imagick object
-    $imagick = new Imagick();
-
-    // Read the first page of the PDF (page index 0)
-
-    // Set the resolution (this affects the quality of the output image)
-    $imagick->setResolution(150, 150);
-
-    // Read the PDF file
-    $imagick->readImage($pdf_file_path . '[0]'); // '[0]' means the first page only
-
-    // Set the background color to white
-    $imagick->setImageBackgroundColor('white');
-
-    // Flatten the image layers (removes transparency)
-    $imagick = $imagick->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
-
-    // Convert the PDF to a JPG
-    $imagick->setImageFormat('jpg');
-
-    // Set compression quality (0 to 100)
-    $imagick->setImageCompressionQuality(90);
-
-    // Generate a unique filename for the JPG file
-    $filename = str_replace('.pdf' , '.jpg', $filename);
-
-    $filename = wp_unique_filename( $output_directory, $filename );
-
+    // Generate output filename
+    $filename = str_replace('.pdf', '.jpg', $filename);
+    $filename = wp_unique_filename($output_directory, $filename);
     $output_path = rtrim($output_directory, '/') . '/' . $filename;
-
-    // Save the JPG file to the server
-    if( $imagick->writeImage($output_path) ){
-      $old_snapshot = get_post_meta($course_id,'course_snapshot',true);
-      if(!empty($old_snapshot)){
-        wp_delete_file( $output_directory . "/" . $old_snapshot );
-      }
-      update_post_meta($course_id,'course_snapshot',$filename);
-      // Clear Imagick object
-      $imagick->clear();
-      $imagick->destroy();
-      return true;
+    
+    // Try Method 1: Direct Ghostscript (works when gs has png256 but not png16malpha)
+    $temp_png = sys_get_temp_dir() . '/poster_temp_' . uniqid() . '.png';
+    
+    // Use png256 device which is available in most Ghostscript installations
+    $gs_command = sprintf(
+        'gs -sDEVICE=png256 -dQUIET -dSAFER -dBATCH -dNOPAUSE -dNOPROMPT -r150 -dFirstPage=1 -dLastPage=1 -sOutputFile=%s %s 2>&1',
+        escapeshellarg($temp_png),
+        escapeshellarg($pdf_file_path)
+    );
+    
+    $gs_output = shell_exec($gs_command);
+    
+    // Check if PNG was created successfully
+    if (file_exists($temp_png) && filesize($temp_png) > 0) {
+        // Convert PNG to JPG using GD or Imagick
+        $conversion_success = false;
+        
+        // Try GD first (most reliable)
+        if (function_exists('imagecreatefrompng')) {
+            $png_image = @imagecreatefrompng($temp_png);
+            if ($png_image !== false) {
+                // Create a white background
+                $width = imagesx($png_image);
+                $height = imagesy($png_image);
+                $jpg_image = imagecreatetruecolor($width, $height);
+                $white = imagecolorallocate($jpg_image, 255, 255, 255);
+                imagefill($jpg_image, 0, 0, $white);
+                
+                // Copy PNG onto white background
+                imagecopy($jpg_image, $png_image, 0, 0, 0, 0, $width, $height);
+                
+                // Save as JPG
+                if (imagejpeg($jpg_image, $output_path, 90)) {
+                    $conversion_success = true;
+                }
+                
+                imagedestroy($png_image);
+                imagedestroy($jpg_image);
+            }
+        }
+        
+        // Try Imagick as fallback (if GD failed)
+        if (!$conversion_success && extension_loaded('imagick')) {
+            try {
+                $imagick = new Imagick($temp_png);
+                $imagick->setImageBackgroundColor('white');
+                $imagick = $imagick->flattenImages();
+                $imagick->setImageFormat('jpg');
+                $imagick->setImageCompressionQuality(90);
+                if ($imagick->writeImage($output_path)) {
+                    $conversion_success = true;
+                }
+                $imagick->clear();
+                $imagick->destroy();
+            } catch (Exception $e) {
+                error_log('generate_poster_snapshot: Imagick conversion failed - ' . $e->getMessage());
+            }
+        }
+        
+        // Clean up temp PNG
+        @unlink($temp_png);
+        
+        if ($conversion_success && file_exists($output_path)) {
+            // Update post meta
+            $old_snapshot = get_post_meta($course_id, 'course_snapshot', true);
+            if (!empty($old_snapshot)) {
+                wp_delete_file($output_directory . '/' . $old_snapshot);
+            }
+            update_post_meta($course_id, 'course_snapshot', $filename);
+            return true;
+        }
     } else {
-      return false;
+        error_log('generate_poster_snapshot: Ghostscript failed to create PNG - ' . ($gs_output ? $gs_output : 'no output'));
     }
-
+    
+    // Method 2: Try Imagick directly (may fail with png16malpha error)
+    if (extension_loaded('imagick')) {
+        try {
+            $imagick = new Imagick();
+            $imagick->setResolution(150, 150);
+            $imagick->readImage($pdf_file_path . '[0]');
+            $imagick->setImageBackgroundColor('white');
+            $imagick = $imagick->mergeImageLayers(Imagick::LAYERMETHOD_FLATTEN);
+            $imagick->setImageFormat('jpg');
+            $imagick->setImageCompressionQuality(90);
+            
+            if ($imagick->writeImage($output_path)) {
+                $old_snapshot = get_post_meta($course_id, 'course_snapshot', true);
+                if (!empty($old_snapshot)) {
+                    wp_delete_file($output_directory . '/' . $old_snapshot);
+                }
+                update_post_meta($course_id, 'course_snapshot', $filename);
+                $imagick->clear();
+                $imagick->destroy();
+                return true;
+            }
+            
+            $imagick->clear();
+            $imagick->destroy();
+        } catch (Exception $e) {
+            error_log('generate_poster_snapshot: All methods failed - ' . $e->getMessage());
+        }
+    }
+    
+    return false;
 }
 
 // Function to generate course poster base on $_GET['course_id']
@@ -2481,7 +2548,7 @@ function display_membership_card() {
           'membership_number' => get_user_meta( $user_id, 'member_number', true)
         );
 
-        load_template( dirname(__FILE__) . "/membership-card.php" ,true, $args );
+        load_template( HKOTA_PLUGIN_DIR . "/template/membership-card.php" ,true, $args );
 
         $html_content = ob_get_clean();
 

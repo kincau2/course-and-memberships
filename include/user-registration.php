@@ -17,10 +17,18 @@ function extra_register_fields() {
          The HKOTA course certificate will be issued under this name. <br><b>You will not be able to change this later.</b></span>
     </p>
     <p class="form-row form-row-wide">
-        <label for="reg_ot_reg_number">Mobile:<span class="required">*</span></label>
-        <input type="tel" name="mobile" id="mobile" value="<?php if ( ! empty( $_POST['mobile'] ) ) esc_attr_e( $_POST['mobile'] );?>"/>
+        <label for="mobile">Mobile:<span class="required">*</span></label>
+        <select name="country_code" id="country_code" style="width: 80px;display: inline-block;vertical-align: middle;height: 40px;padding: .5rem 1rem;background: #f6f6f6;">
+            <option value="+852" <?php if ( ! empty( $_POST['country_code'] ) && $_POST['country_code'] == '+852' ) echo 'selected'; ?>>+852</option>
+            <option value="+853" <?php if ( ! empty( $_POST['country_code'] ) && $_POST['country_code'] == '+853' ) echo 'selected'; ?>>+853</option>
+            <option value="+86" <?php if ( ! empty( $_POST['country_code'] ) && $_POST['country_code'] == '+86' ) echo 'selected'; ?>>+86</option>
+            <option value="+44" <?php if ( ! empty( $_POST['country_code'] ) && $_POST['country_code'] == '+44' ) echo 'selected'; ?>>+44</option>
+            <option value="+1" <?php if ( ! empty( $_POST['country_code'] ) && $_POST['country_code'] == '+1' ) echo 'selected'; ?>>+1</option>
+            <option value="+61" <?php if ( ! empty( $_POST['country_code'] ) && $_POST['country_code'] == '+61' ) echo 'selected'; ?>>+61</option>
+        </select>
+        <input type="tel" name="mobile" id="mobile" style="width: calc(100% - 90px); display: inline-block; vertical-align: middle;" value="<?php if ( ! empty( $_POST['mobile'] ) ) esc_attr_e( $_POST['mobile'] );?>"/>
     </p>
-    <p class="form-row form-row-wide">
+    <p class="form-row form-row-wide">
       <label for="reg_ot_reg_number">OT Registration number:</label>
       <input type="text" name="ot_reg_number" id="reg_ot_reg_number" value="<?php if ( ! empty( $_POST['ot_reg_number'] ) ) esc_attr_e( $_POST['ot_reg_number'] );?>"/>
     </p>
@@ -47,11 +55,46 @@ function validate_custom_register_fields( $username, $email, $validation_errors 
 
     if ( isset( $_POST['mobile'] ) && empty( $_POST['mobile'] ) ) {
 			$validation_errors->add( 'mobile_error', __( 'Mobile number is required!.', 'woocommerce' ) );
-		}else{
-      $pattern = "/^[356789]{1}[0-9]{7}$/";
-      // Check if the mobile number matches the pattern
-      if ( !preg_match( $pattern, $_POST['mobile']) ) {
-          $validation_errors->add( 'mobile_error', __( 'Please enter a valid Hong Kong mobile number.', 'woocommerce' ) );
+		} else {
+      $country_code = isset( $_POST['country_code'] ) ? $_POST['country_code'] : '+852';
+      $mobile = $_POST['mobile'];
+      $valid = false;
+      
+      // Validate based on country code
+      if ( $country_code == '+852' ) {
+          // Hong Kong: 8 digits starting with 5, 6, 7, 8, or 9
+          $pattern = "/^[56789]{1}[0-9]{7}$/";
+          $valid = preg_match( $pattern, $mobile );
+          $error_message = 'Please enter a valid Hong Kong mobile number (8 digits starting with 5, 6, 7, 8, or 9).';
+      } elseif ( $country_code == '+853' ) {
+          // Macau: 8 digits starting with 6
+          $pattern = "/^6[0-9]{7}$/";
+          $valid = preg_match( $pattern, $mobile );
+          $error_message = 'Please enter a valid Macau mobile number (8 digits starting with 6).';
+      } elseif ( $country_code == '+86' ) {
+          // China: 11 digits starting with 1
+          $pattern = "/^1[0-9]{10}$/";
+          $valid = preg_match( $pattern, $mobile );
+          $error_message = 'Please enter a valid China mobile number (11 digits starting with 1).';
+      } elseif ( $country_code == '+44' ) {
+          // UK: 10-11 digits, mobile numbers typically start with 7
+          $pattern = "/^(7[0-9]{9}|07[0-9]{9})$/";
+          $valid = preg_match( $pattern, $mobile );
+          $error_message = 'Please enter a valid UK mobile number (10-11 digits, starting with 7 or 07).';
+      } elseif ( $country_code == '+1' ) {
+          // USA/Canada: 10 digits
+          $pattern = "/^[2-9][0-9]{9}$/";
+          $valid = preg_match( $pattern, $mobile );
+          $error_message = 'Please enter a valid USA/Canada mobile number (10 digits).';
+      } elseif ( $country_code == '+61' ) {
+          // Australia: 9-10 digits, mobile numbers start with 4
+          $pattern = "/^(4[0-9]{8}|04[0-9]{8})$/";
+          $valid = preg_match( $pattern, $mobile );
+          $error_message = 'Please enter a valid Australia mobile number (9-10 digits, starting with 4 or 04).';
+      }
+      
+      if ( !$valid ) {
+          $validation_errors->add( 'mobile_error', __( $error_message, 'woocommerce' ) );
       }
     }
 
@@ -90,9 +133,12 @@ function save_custom_register_fields( $customer_id ) {
 		update_user_meta( $customer_id, 'billing_last_name', sanitize_text_field( $_POST['billing_last_name'] ) );
 	}
 
-	if ( isset( $_POST['mobile'] ) && !empty( $_POST['mobile'] ) && !empty( $_POST['mobile'] ) ) {
-		update_user_meta( $customer_id, 'mobile', sanitize_text_field( $_POST['mobile'] ) );
-    update_user_meta( $customer_id, 'billing_phone', sanitize_text_field( $_POST['mobile'] ) );
+	if ( isset( $_POST['mobile'] ) && !empty( $_POST['mobile'] ) ) {
+		$country_code = isset( $_POST['country_code'] ) ? sanitize_text_field( $_POST['country_code'] ) : '+852';
+		$mobile = sanitize_text_field( $_POST['mobile'] );
+		$full_mobile = $country_code . ' ' . $mobile;
+		update_user_meta( $customer_id, 'mobile', $full_mobile );
+    update_user_meta( $customer_id, 'billing_phone', $full_mobile );
 	}
 
   if ( isset( $_POST['ot_reg_date'] ) ) {
