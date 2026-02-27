@@ -2766,8 +2766,8 @@ function private_ot_list_shortcode() {
         .pot-table,.pot-table thead,.pot-table tbody,.pot-table th,.pot-table td,.pot-table tr{display:block}
         .pot-table thead{display:none}
         .pot-table tbody tr{margin-bottom:12px;border:1px solid #ddd;border-radius:6px;padding:10px;background:#fff}
-        .pot-table tbody td{padding:4px 0;border:none;position:relative;padding-left:40%}
-        .pot-table tbody td::before{content:attr(data-label);position:absolute;left:0;top:4px;font-weight:600;color:#2a7f8b;width:38%;padding-right:6px;box-sizing:border-box;font-size:13px}
+        .pot-table tbody td{padding:6px 0;border:none;display:flex;flex-direction:column;gap:2px}
+        .pot-table tbody td::before{content:attr(data-label);font-weight:600;color:#2a7f8b;font-size:13px;line-height:1.3}
         .pot-table tbody tr:nth-child(even){background:#fff}
     }
     </style>
