@@ -2674,3 +2674,186 @@ function my_login_logo() {
 	<?php
 }
 
+// ============================================================
+// Shortcode: [private_ot_list] – Private OT Practitioners List
+// ============================================================
+add_shortcode('private_ot_list', 'private_ot_list_shortcode');
+
+function private_ot_list_get_data() {
+    return array(
+        array('name'=>'Au Lap Yan','org'=>'Healing Hands Rehabilitation & Wellness Centre Limited','address'=>'38 Pitt Street, Hip Kwan Commerical Building, Yaumatei, Room 1002','tel'=>'93380892','email'=>'frederickau2010@yahoo.com.hk','hours'=>'Need advance Booking','fees'=>'Range from $650 - $1200','services'=>'Med. & Geri. 內科及老人科, Ortho. 骨科, Psychi. rehab. 精神復康'),
+        array('name'=>'Au Yeung Ka Yu','org'=>'Rehab Posssible Co Ltd','address'=>'Flat D, 15/F, Block 19, Richland Gardens, Kowloon Bay, Kln','tel'=>'90265001','email'=>'rehabpossible@yandex.com','hours'=>'Mon-Sat (9:00 - 18:00)','fees'=>'$900-$1200/hour','services'=>'Med. & Geri. 內科及老人科, Primary Health Care 基層醫療, Com. outreach 社區外展'),
+        array('name'=>'Chan Ping Shing Ernest','org'=>'Excel Rehabilitation Centre Limited','address'=>'Room 916, 9/F, 264-298 Castle Peak Road, Tsuen Wan, NT','tel'=>'24167898','email'=>'excelrehab.ac@gmail.com','hours'=>'Monday to Friday: 9:00-18:00, Saturday and Sunday: By appointment','fees'=>'$640 - $680up (clinic treatment), others individually quoted','services'=>'Med. & Geri. 內科及老人科, Ortho. 骨科, Work Rehab. 工作復康, Paediatric 兒科, Com. outreach 社區外展'),
+        array('name'=>'Chan Pui Yee','org'=>'Twinkle Therapy','address'=>'荔枝角時代中心19樓1901室','tel'=>'36190658','email'=>'info@twinkle-therapy.com.hk','hours'=>'星期二至六，上午 9:30至下午17:00','fees'=>'評估:$1100 (60min), 治療堂:每8堂學費為 $7200（每節 50min）','services'=>'Paediatric 兒科'),
+        array('name'=>'CHAN Tsz Man Stephen 陳子文','org'=>'CREST Child Rehabilitation & Education Service Team','address'=>'Rm 706, Peninsula Tower, No. 538, Castle Peak Road','tel'=>'36283443','email'=>'stephen@crest.hk','hours'=>'Monday to Friday 9am to 6pm','fees'=>'','services'=>'Paediatric 兒科, School Outreach Service (到校服務）'),
+        array('name'=>'Chan Tsz Yu','org'=>'Outreach Therapy and Nursing Services Ltd.','address'=>'Suite 1403A, 14/F, Champion Building, 301-309 Nathan Road, Jordan, KLN','tel'=>'','email'=>'','hours'=>'','fees'=>'','services'=>'Com. outreach 社區外展'),
+        array('name'=>'Chan Yuet Yan','org'=>'Wisdom Bridge Child Development Ltd','address'=>'九龍旺角彌敦道735號迅華大厦6樓 (電梯按4字)','tel'=>'','email'=>'','hours'=>'12 hours per week','fees'=>'','services'=>'Paediatric 兒科'),
+        array('name'=>'Chau Wing Lam','org'=>'YWCA','address'=>'沙頭角迎海樓地下5-7鋪','tel'=>'22475335','email'=>'irischau@ywca.org.hk','hours'=>'Monday to Friday 09-17:00','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Primary Health Care 基層醫療, Com. outreach 社區外展'),
+        array('name'=>'CHEUNG Chi Chuen (張志泉)','org'=>'Lokin Integrated Services Limited (樂健綜合服務有限公司)','address'=>'Room 1905, Nan Fung Centre, 264-298 Castle Peak Road, Tsuen Wan, N.T., Hong Kong 香港新界荃灣青山道264-298號南豐中心19樓1905室','tel'=>'56366789','email'=>'info@lokin.com.hk','hours'=>'By Appointment (需預約)','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Work Rehab. 工作復康, Primary Health Care 基層醫療, Psychi. rehab. 精神復康, Com. outreach 社區外展, Rehab., Child Development, Training, Research (復康、兒童發展、培訓、研究)'),
+        array('name'=>'Cheung Ka Lung','org'=>'Quality Therapy and Education Centre','address'=>'22/F, Ka Nin Wah Commercial Building, 423-425 Hennessy Road, Causeway Bay, Hong Kong','tel'=>'96241505','email'=>'lung@hktherapy.com','hours'=>'By Appointment','fees'=>'refer www.hktherapy.com/clinic.html','services'=>'Med. & Geri. 內科及老人科, Chest 胸肺科, Ortho. 骨科, Cardiac 心臟科, Work Rehab. 工作復康, Paediatric 兒科, Primary Health Care 基層醫療, Psychi. rehab. 精神復康, Com. outreach 社區外展'),
+        array('name'=>'Cheung Wai Ping Winsome','org'=>'Micwin Child Development Centre','address'=>'Level 7 Nan Fung Tower 88 Connaught Road Central Sheung Wan HK','tel'=>'60320424','email'=>'winsome@micwin-cdc.com','hours'=>'Monday to Friday','fees'=>'','services'=>''),
+        array('name'=>'Cheung Yuk Ha Sandy','org'=>'International Occupational Therapy Centre','address'=>'4C Yick Fung Bidg 94-96 Des Voeux Rd West Hong Kong','tel'=>'66208803','email'=>'cheungyhs@yahoo.com.hk','hours'=>'by appointment','fees'=>'variable, depend on service needed','services'=>'Ortho. 骨科'),
+        array('name'=>'Cheung Yuk Ha Sandy','org'=>'International Occupational Therapy Centre','address'=>'4C Yick Fung Building, 94-96 Des Voeux Rd West, Hong Kong','tel'=>'66208803','email'=>'cheungyhs@yahoo.com.hk','hours'=>'by appointment','fees'=>'$300-$500','services'=>''),
+        array('name'=>'Choi Pak Ho','org'=>'Lotus Rehabilitation Services Limited','address'=>'Workshop No.3, 5/F, Mega Trade Centre, 1-6 Mei Wan Street, Tsuen Wan, New Territories','tel'=>'','email'=>'','hours'=>'','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Paediatric 兒科'),
+        array('name'=>'Chong Kiu Yan','org'=>'Outreach Therapy and Nursing Services Ltd.','address'=>'Suite 1403A, 14/F, Champion Building, 301-309 Nathan Road, Jordan, KLN','tel'=>'','email'=>'','hours'=>'9:00- 18:00','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Com. outreach 社區外展'),
+        array('name'=>'Chow Chi Yuet Connie','org'=>'Outreach Therapy and Nursing Services Ltd.','address'=>'Suite 1403A, 14/F, Champion Building, 301-309 Nathan Road, Jordan, KLN','tel'=>'','email'=>'','hours'=>'Mon-Fri 9:00-17:00','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Com. outreach 社區外展'),
+        array('name'=>'Chow Kit Ying, Kathy 周潔英','org'=>'KC Occupational Therapy and Product Company Limited','address'=>'13AB 13/F Mass Resources Development Building, 12 Humphrey Avenue, Tsimshatsui, Kowloon 九龍尖沙嘴堪富利士道12號宏貿發展大廈13字樓AB室','tel'=>'65378287','email'=>'chowkykathy@gmail.com','hours'=>'Monday to Friday 星期一至五: 10:00 - 18:00, Saturday 星期六 10:00 - 15:00','fees'=>'HK$1700 per session 每節 (1.5 to 2 hours 小時）','services'=>'Med. & Geri. 內科及老人科, Work Rehab. 工作復康, NeuroIFRAH training, physical rehabilitation'),
+        array('name'=>'CHOW Shelley M.','org'=>'Rehabilitation Consultants','address'=>'904 - 906, 9/F, Strand 50, 50 Bonham Strand, Sheung Wan, HK','tel'=>'28506276','email'=>'shellcat@netvigator.com','hours'=>'Monday to Friday 8.30 to 18.30 Saturday 9.30 to 14:00 booking in advance','fees'=>'Call or email for details','services'=>'Med. & Geri. 內科及老人科, Ortho. 骨科, Paediatric 兒科, Primary Health Care 基層醫療, Medicolegal'),
+        array('name'=>'Choy Li Li Sally 蔡莉莉','org'=>'Links Child Development Centre 領思兒童發展中心','address'=>'19th Floor, Office Tower Two, Grand Plaza, 625 & 639 Nathan Road, Kowloon 九龍彌敦道625&639號雅蘭中心辦公樓二期十九樓','tel'=>'31111855','email'=>'sally.choy@linkscdc.com','hours'=>'星期一至四 : 9:00-18:00 星期五9:00-19:00 星期六9:00-17:00','fees'=>'每節45分鐘$890 - $1050','services'=>''),
+        array('name'=>'Chu Man Lai, Mary','org'=>'Hong Kong Pain Medicine Centre','address'=>'13/F, Lee Kum Kee Central, 54-58 Des Voeux Road Central, Hong Kong','tel'=>'29888003','email'=>'booking@hkpainmed.com','hours'=>'by appointment','fees'=>'','services'=>'Pain management'),
+        array('name'=>'Chung Vivian Y. K.','org'=>'Wisdom Bridge Child Development Ltd','address'=>'5/F, Shun Wah Building, 735 Nathan Road, Mongkok, Kowloon, Hong Kong (press 4 in lift)','tel'=>'23962311','email'=>'info@wisdombridge.com.hk','hours'=>'9:00-18:30','fees'=>'$450 - $1100.','services'=>'Paediatric 兒科, Com. outreach 社區外展, Sales of equipments for rehabilitation & developmental training'),
+        array('name'=>'Chung Wing Yan','org'=>'Links Child Development Centre','address'=>'19/F, Office Tower Two, Grand Plaza, 625 & 639 Nathan Road, Mong Kok, Kowloon','tel'=>'53788606','email'=>'eileen.chungwy@gmail.com','hours'=>'0900-1800','fees'=>'','services'=>'Paediatric 兒科'),
+        array('name'=>'FUNG Mang Tak (馮孟得)','org'=>'Lokin Integrated Services Limited (樂健綜合服務有限公司)','address'=>'Room 1905, Nan Fung Centre, 264-298 Castle Peak Road, Tsuen Wan, N.T., Hong Kong 香港新界荃灣青山道264-298號南豐中心19樓1905室','tel'=>'56376789','email'=>'info@lokin.com.hk','hours'=>'By Appointment (需預約)','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Work Rehab. 工作復康, Primary Health Care 基層醫療, Psychi. rehab. 精神復康, Com. outreach 社區外展, Rehab., Child Development, Training, Research (復康、兒童發展、培訓、研究)'),
+        array('name'=>'Kong Eva','org'=>'CREST Child Rehabilitation & Education Service Team','address'=>'Rm 706, Peninsula Tower, No. 538, Castle Peak Road','tel'=>'','email'=>'','hours'=>'1-2 hours per week','fees'=>'','services'=>'Paediatric 兒科'),
+        array('name'=>'Kong Lok Hang, Harrison','org'=>'CHG Health Service Limited','address'=>'Room 2306, Trendy Centre, 682-684 Castle Peak Road, Lai Chi Kok, Kowloon','tel'=>'97307565','email'=>'info@chghsltd.com','hours'=>'9:00 - 17:30','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Primary Health Care 基層醫療, Psychi. rehab. 精神復康, Com. outreach 社區外展'),
+        array('name'=>'Lam Choi Pik, Iris','org'=>'Faith Rehabilitation Center','address'=>'Room 710-711, Hang Shing Building, 363 Nathan Road, Yaumatei','tel'=>'27798787','email'=>'faithrehabhk@gmail.com','hours'=>'Monday to Friday 10:00-13:00; 15:30-18:30, Saturday 10:00-14:00','fees'=>'please call for quotation','services'=>'Med. & Geri. 內科及老人科, Ortho. 骨科, Work Rehab. 工作復康, Com. outreach 社區外展'),
+        array('name'=>'Lam K Y Jessie','org'=>'Prestige Integrated Therapy Centre','address'=>'1404A, 14/F, Champion Building, 301-309 Nathan Road, Jordan, Kowloon','tel'=>'23846618','email'=>'jessielamyu@gmail.com','hours'=>'By appointment','fees'=>'','services'=>'Ortho. 骨科, Hand Therapy'),
+        array('name'=>'LAU Chi ho','org'=>'STEP Health','address'=>'SHEUNG WAN HK','tel'=>'64485002','email'=>'','hours'=>'Please contact for details','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Com. outreach 社區外展, Home Assessment and Modification; Training & Development'),
+        array('name'=>'Lee Cheuk Ning 李卓寧','org'=>'CREST Child Rehabilitation and Education Service Team','address'=>'706 Peninsula Tower, 538 Castle Peak Road, Lai Chi Kok, Kowloon.','tel'=>'','email'=>'','hours'=>'Mon-Sat 9:00-18:00','fees'=>'','services'=>'Paediatric 兒科, School Outreach Service (到校服務）'),
+        array('name'=>'Lee James','org'=>'Mega Inspire','address'=>'Unit 504, Catic Building, 44 Tsun Yip Street, Kwun Tong, Kowloon','tel'=>'66038804','email'=>'megainspire.hk@gmail.com','hours'=>'8:30-21:30','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Paediatric 兒科, Primary Health Care 基層醫療, Psychi. rehab. 精神復康, Com. outreach 社區外展'),
+        array('name'=>'LEE Yuet Ying, Grace Dr','org'=>'CHG Health Service Limited','address'=>'Unit 06, 23/F, Trendy Centre, 682-684 Castle Peak Road, Lai Chi Kok, Kln','tel'=>'92136700','email'=>'graceleechghs@gmail.com','hours'=>'Mon. to Sat., 9:00-18:00','fees'=>'$300 - $2000','services'=>'Med. & Geri. 內科及老人科, Primary Health Care 基層醫療, Com. outreach 社區外展, Psychogeriatrics'),
+        array('name'=>'Leung Kam Fai','org'=>'CHG Health Service Limited','address'=>'Unit 06, 23/F, Trendy Centre, Castle Peak Road 682-684, Lai Chi Kok, Kowloon','tel'=>'97091612','email'=>'hugoleungchghs@gmail.com','hours'=>'Mon, Sat, Sun 9:00-18:00, Wed 14:00-18:00 Tue 9:00-18:00 (Occasionally)','fees'=>'800','services'=>'Med. & Geri. 內科及老人科, Primary Health Care 基層醫療, Com. outreach 社區外展'),
+        array('name'=>'Leung Pui Kei Raymie','org'=>'CREST Child Rehabilitation & Education Service Team','address'=>'Rm 706, Peninsular Tower, 538 Castle Peak Rd, Lai Chi Kok, Kln.','tel'=>'60884955','email'=>'','hours'=>'','fees'=>'','services'=>'Paediatric 兒科'),
+        array('name'=>'Liu Wai Man','org'=>'CREST Child Rehabilitation and Education Service Team','address'=>'九龍青山道538號半島大廈 706室','tel'=>'36283443','email'=>'','hours'=>'Monday to Saturday 9:00-18:00','fees'=>'','services'=>'Paediatric 兒科'),
+        array('name'=>'Lui Ka Ho 呂家豪','org'=>'We Can Consultancy (HK) Company Limited 力勤顧問香港有限公司','address'=>'Rm R, 6/F MING SHAN Industrial Bldg 19-21 Hing Yip Street Kwun Tong 觀塘興業街19-21號明生工業大廈6樓R室','tel'=>'92178797','email'=>'kaholui@yahoo.com.hk','hours'=>'8:30-21:30','fees'=>'$500-$1000','services'=>'Med. & Geri. 內科及老人科, Paediatric 兒科, Primary Health Care 基層醫療, Psychi. rehab. 精神復康'),
+        array('name'=>'Lung Pui Yee','org'=>'Rehab Clinic, The Hong Kong Polytechnic University','address'=>'AG056, G/F, Core A, HK Polytechnic University, Hung Hom, Kowloon.','tel'=>'27666734','email'=>'grace.lung@polyu.edu.hk','hours'=>'9:30 to 18:30','fees'=>'Please contact for details','services'=>'Paediatric 兒科'),
+        array('name'=>'MOK YAT KWAN','org'=>'Shepherd Rehabilitation Services Limited 牧恩復康服務有限公司','address'=>'Unit 2202, 22/F, Causeway Bay Plaza I, 489 Hennessy Road, Causeway Bay, Hong Kong','tel'=>'39703530','email'=>'shepherd.rsltd@gmail.com','hours'=>'MON - FRI 09:00-18:00','fees'=>'BY QUOTATON','services'=>'Med. & Geri. 內科及老人科, Com. outreach 社區外展'),
+        array('name'=>'Ng Yuk Ling 伍玉玲','org'=>'救世軍天鑰家庭家兒童發展中心','address'=>'九龍旺角廣東道982號嘉富商業中心1樓102室','tel'=>'36190191','email'=>'ot2-sky@ssd.salvation.org.hk','hours'=>'9:00-17:30','fees'=>'','services'=>'Paediatric 兒科'),
+        array('name'=>'Tsang Lau Kit Ping, Alice','org'=>'Elite Resource & Consultation Services','address'=>'8/F So Hong Commercial Building, 41 Jervois Street, Sheung Wan, Hong Kong','tel'=>'2810-4988','email'=>'contactus@elite-rcs.com','hours'=>'Monday to Friday 10am to 1pm, 2pm to 6pm','fees'=>'HK$1,200 and up per hour','services'=>'Ortho. 骨科, Psychi. rehab. 精神復康, medico-legal evaluation and report, case management, stroke/neurological conditions, dementia, burns injury, orthopaedic conditions'),
+        array('name'=>'WAN LAI YI SELINA 尹麗儀','org'=>'天頌綜合康復中心有限公司','address'=>'九龍油麻地碧街38号協群商業大厦1002室','tel'=>'90372446','email'=>'healinghandsrehab1002@gmail.com','hours'=>'Monday to Saturday (except Tuesday), 9:00 to 18:00','fees'=>'$650 per session (except community service)','services'=>'Med. & Geri. 內科及老人科, Ortho. 骨科, Com. outreach 社區外展, Pain management'),
+        array('name'=>'Watt Clare','org'=>'SPOT Children\'s Interdisciplinary Therapy Centre','address'=>'SPOT Central, 19F World Trust Tower, 50 Stanley Street, Central, Hong Kong','tel'=>'25445835','email'=>'clare.watt@spot.com.hk','hours'=>'Monday to Saturday','fees'=>'','services'=>'Paediatric 兒科'),
+        array('name'=>'Weng Kwai Heung','org'=>'Joyful Training Center','address'=>'5/F, Kowloon Building, 555 Nathan Road, Kowloon','tel'=>'98138485','email'=>'karan_weng@yahoo.com.hk','hours'=>'10:00-18:00','fees'=>'','services'=>'Paediatric 兒科'),
+        array('name'=>'WONG Kam Wing','org'=>'Grandpire Medical Centre','address'=>'Room 13AB, 13/F, Mass Resources Development Building, 12 Humphrey Avenue, Tsim Sha Tsui, Kowloon, Hong Kong.','tel'=>'92538753','email'=>'danewong@ymail.com','hours'=>'Flexible hours','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Com. outreach 社區外展, Neuro-Rehabilitation'),
+        array('name'=>'Wong Wing Yi (Katherine)','org'=>'Wisdom Bridge Child Development Center/ Freelance','address'=>'九龍旺角彌敦道735號迅華大厦6樓','tel'=>'66885158','email'=>'wwykatherine@gmail.com','hours'=>'9:30-18:30','fees'=>'','services'=>'Paediatric 兒科'),
+        array('name'=>'YAU WING YEE LINDA','org'=>'Connectedness Assessment & Treatment Centre','address'=>'Room 1003-04, 10/F, 102 Austin Road, Tsim Sha Tsui','tel'=>'23625411','email'=>'connectednesshk@gmail.com','hours'=>'9:00-17:00, Mon-Sat','fees'=>'$1300/session','services'=>'Paediatric 兒科'),
+        array('name'=>'Yip Wing Yin Rosita','org'=>'Primecare psychological wellness and developmental assessment center','address'=>'41/F, Office Tower, Langham Place','tel'=>'92292410','email'=>'rositaywy@gmail.com','hours'=>'9:30 to 17:00','fees'=>'$1000 to $1600','services'=>'Paediatric 兒科'),
+        array('name'=>'Yiu Ida','org'=>'Pierre Leong & Co. Ltd.','address'=>'Suit 1804-6, Two Chinachem Exchange Square, 338 King\'s Road, North Point, HK.','tel'=>'28611681','email'=>'idayiu@yahoo.com.hk','hours'=>'9:00 to 18:00','fees'=>'','services'=>'Work Rehab. 工作復康'),
+        array('name'=>'Young Maggie','org'=>'Premium healthcare Services','address'=>'Hong Kong','tel'=>'92197855','email'=>'maggieyoung.premiumhcs@gmail.com','hours'=>'Negotiable','fees'=>'','services'=>'Med. & Geri. 內科及老人科, Ortho. 骨科, Primary Health Care 基層醫療'),
+        array('name'=>'NG Chak Wing 伍澤榮','org'=>'D5 Neurological And Stroke Rehabilitation Clinic 伍威廉腦神經及中風復康診所','address'=>'4/F, China Insurance Building, 48 Cameron Road, Tsim Sha Tsui, Kowloon','tel'=>'61380555','email'=>'d5rehabclinic@gmail.com','hours'=>'Mon-Sun (By appointment)','fees'=>'$1,400 up (contact for detailed service fee)','services'=>'Med. & Geri. 內科及老人科, Work Rehab. 工作復康, Com. outreach 社區外展, Stroke Rehabilitation (Neuro-IFRAH® approach), Cognitive and Functional Rehabilitation'),
+        array('name'=>'Choi Yip Shing 蔡業成','org'=>'Craftsmanship Rehabilitation Centre Limited 匠心復康工房有限公司','address'=>'Flat/Rm 4510, Blk 2, 45/F, Metroplaza, No. 223 Hing Fong Road, Kwai Chung, NT','tel'=>'90490065','email'=>'caleb.rehab@gmail.com','hours'=>'9:00 to 18:00','fees'=>'contact for details','services'=>'Med. & Geri. 內科及老人科, Com. outreach 社區外展, neuro-rehabilitation with Neuro-IFRAH approach'),
+        array('name'=>'LAM, Ka Shing Billy 林家盛','org'=>'Occu Rehab 屋橋復康','address'=>'Unit705, 7/F. 9 Wing Hong Street, Cheung Sha Wan, Kowloon, Hong Kong','tel'=>'52851212','email'=>'occu.rehab.hk@gmail.com','hours'=>'Monday - Saturday','fees'=>'$1,500 to $3,500 (> 1-3hours) (Depends on Intervention program recommended)','services'=>'Med. & Geri. 內科及老人科, Com. outreach 社區外展, Stroke & Neuro Rehabilitation, Functional Training, Home mod & Aids, Caregiver Training'),
+        array('name'=>'Mo Sung Yu Chloe','org'=>'TheraBeing Family Wellness Limited','address'=>'Rm 1201, 12/F, Lee Garden Six, 111 Leighton Road, Causeway Bay, Hong Kong 香港銅鑼灣禮頓道111號利園六期12樓1201室','tel'=>'93598839 / 31562776','email'=>'chloe.mo@therabeing.com','hours'=>'By Appointment','fees'=>'varied; $1080 to $1350 / session','services'=>'Med. & Geri. 內科及老人科, Chest 胸肺科, Ortho. 骨科, Cardiac 心臟科, Work Rehab. 工作復康, Paediatric 兒科, Primary Health Care 基層醫療, Psychi. rehab. 精神復康, Com. outreach 社區外展, Rehab, Child Development, Outreach Service for school and care homes'),
+        array('name'=>'Chan Yuk 陳煜','org'=>'Locomotion Integrated Therapy Centre','address'=>'Unit 10A, 228 Electric Road, North Point, Hong Kong','tel'=>'56458999','email'=>'info@locomotionhk.com','hours'=>'10am-8pm (by appointment)','fees'=>'contact for details','services'=>'Med. & Geri. 內科及老人科, Ortho. 骨科, Primary Health Care 基層醫療, Pain management, Lymphatic Drainage, Neuro-Rehabilitation (Neuro-IFRAH® approach, Stroke, Parkinson\'s Disease, etc), Cognitive Rehabilitation/Dementia Care, Insole and splintage prescription'),
+        array('name'=>'Lai Hoi Fung 黎凱豐','org'=>'Locomotion Integrated Therapy Centre','address'=>'Unit 10A, 228 Electric Road, North Point, Hong Kong','tel'=>'56458999','email'=>'info@locomotionhk.com','hours'=>'10am-8pm (by appointment)','fees'=>'contact for details','services'=>'Med. & Geri. 內科及老人科, Ortho. 骨科, Primary Health Care 基層醫療, Com. outreach 社區外展, Pain management, Neuro-Rehabilitation (Stroke, Parkinson\'s Disease, etc), Cognitive Rehabilitation/Dementia Care, Post hospitalization rehabilitation (Outreach/clinic-based), Home modification'),
+    );
+}
+
+function private_ot_list_shortcode() {
+    $data = private_ot_list_get_data();
+    $total = count($data);
+    ob_start();
+    ?>
+    <style>
+    .pot-wrap{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:100%;overflow-x:auto}
+    .pot-search{width:100%;padding:10px 14px;font-size:15px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;margin-bottom:6px}
+    .pot-count{font-size:13px;color:#666;margin-bottom:10px}
+    .pot-table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.5}
+    .pot-table thead{background:#2a7f8b}
+    .pot-table thead th{color:#fff;padding:10px 12px;text-align:left;font-weight:600;cursor:pointer;white-space:nowrap;position:relative;user-select:none}
+    .pot-table thead th:hover{background:#24707a}
+    .pot-table thead th .pot-sort-icon{margin-left:4px;font-size:11px;opacity:.6}
+    .pot-table thead th.pot-asc .pot-sort-icon::after{content:"▲"}
+    .pot-table thead th.pot-desc .pot-sort-icon::after{content:"▼"}
+    .pot-table thead th:not(.pot-asc):not(.pot-desc) .pot-sort-icon::after{content:"⇅"}
+    .pot-table tbody tr{border-bottom:1px solid #e5e5e5}
+    .pot-table tbody tr:nth-child(even){background:#f9f9f9}
+    .pot-table tbody tr:hover{background:#eef7f8}
+    .pot-table tbody td{padding:10px 12px;vertical-align:top;word-break:break-word}
+    .pot-table tbody td a{color:#2a7f8b;text-decoration:none}
+    .pot-table tbody td a:hover{text-decoration:underline}
+    .pot-table .pot-no-results{text-align:center;padding:30px;color:#888;font-size:15px}
+    @media(max-width:900px){
+        .pot-table,.pot-table thead,.pot-table tbody,.pot-table th,.pot-table td,.pot-table tr{display:block}
+        .pot-table thead{display:none}
+        .pot-table tbody tr{margin-bottom:12px;border:1px solid #ddd;border-radius:6px;padding:10px;background:#fff}
+        .pot-table tbody td{padding:4px 0;border:none;position:relative;padding-left:40%}
+        .pot-table tbody td::before{content:attr(data-label);position:absolute;left:0;top:4px;font-weight:600;color:#2a7f8b;width:38%;padding-right:6px;box-sizing:border-box;font-size:13px}
+        .pot-table tbody tr:nth-child(even){background:#fff}
+    }
+    </style>
+    <div class="pot-wrap">
+        <input type="text" class="pot-search" id="potSearch" placeholder="Search..." />
+        <div class="pot-count" id="potCount">顯示 <?php echo $total; ?> / <?php echo $total; ?> 結果</div>
+        <table class="pot-table" id="potTable">
+            <thead>
+                <tr>
+                    <th data-col="0">Name 治療師姓名<span class="pot-sort-icon"></span></th>
+                    <th data-col="1">Organization 診所名稱<span class="pot-sort-icon"></span></th>
+                    <th data-col="2">Address 地址<span class="pot-sort-icon"></span></th>
+                    <th data-col="3">Tel 電話<span class="pot-sort-icon"></span></th>
+                    <th data-col="4">Email 電郵<span class="pot-sort-icon"></span></th>
+                    <th data-col="5">Service Hours 服務時間<span class="pot-sort-icon"></span></th>
+                    <th data-col="6">Fees 診金<span class="pot-sort-icon"></span></th>
+                    <th data-col="7">Services 服務類別<span class="pot-sort-icon"></span></th>
+                </tr>
+            </thead>
+            <tbody id="potBody">
+            <?php foreach ($data as $row): ?>
+                <tr>
+                    <td data-label="Name 治療師姓名"><?php echo esc_html($row['name']); ?></td>
+                    <td data-label="Organization 診所名稱"><?php echo esc_html($row['org']); ?></td>
+                    <td data-label="Address 地址"><?php echo esc_html($row['address']); ?></td>
+                    <td data-label="Tel 電話"><?php echo esc_html($row['tel']); ?></td>
+                    <td data-label="Email 電郵"><?php
+                        $email = $row['email'];
+                        if ($email) {
+                            echo '<a href="mailto:' . esc_attr($email) . '">' . esc_html($email) . '</a>';
+                        }
+                    ?></td>
+                    <td data-label="Service Hours 服務時間"><?php echo esc_html($row['hours']); ?></td>
+                    <td data-label="Fees 診金"><?php echo esc_html($row['fees']); ?></td>
+                    <td data-label="Services 服務類別"><?php echo esc_html($row['services']); ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <script>
+    (function(){
+        var search = document.getElementById('potSearch');
+        var tbody = document.getElementById('potBody');
+        var countEl = document.getElementById('potCount');
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+        var total = rows.length;
+        var ths = document.querySelectorAll('#potTable thead th');
+        var sortCol = -1, sortDir = 0; // 0=none, 1=asc, 2=desc
+
+        // Instant filter
+        search.addEventListener('input', function(){
+            var q = this.value.toLowerCase().trim();
+            var shown = 0;
+            rows.forEach(function(row){
+                var cells = row.querySelectorAll('td');
+                var match = false;
+                for(var i = 0; i < cells.length; i++){
+                    if(cells[i].textContent.toLowerCase().indexOf(q) !== -1){ match = true; break; }
+                }
+                row.style.display = match ? '' : 'none';
+                if(match) shown++;
+            });
+            countEl.textContent = '顯示 ' + shown + ' / ' + total + ' 結果';
+        });
+
+        // Sort
+        ths.forEach(function(th){
+            th.addEventListener('click', function(){
+                var col = parseInt(this.getAttribute('data-col'));
+                if(sortCol === col){ sortDir = sortDir === 1 ? 2 : 1; }
+                else { sortCol = col; sortDir = 1; }
+                ths.forEach(function(h){ h.classList.remove('pot-asc','pot-desc'); });
+                this.classList.add(sortDir === 1 ? 'pot-asc' : 'pot-desc');
+                rows.sort(function(a,b){
+                    var va = a.children[col].textContent.trim().toLowerCase();
+                    var vb = b.children[col].textContent.trim().toLowerCase();
+                    if(va < vb) return sortDir === 1 ? -1 : 1;
+                    if(va > vb) return sortDir === 1 ? 1 : -1;
+                    return 0;
+                });
+                rows.forEach(function(r){ tbody.appendChild(r); });
+            });
+        });
+    })();
+    </script>
+    <?php
+    return ob_get_clean();
+}
