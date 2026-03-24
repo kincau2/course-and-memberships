@@ -1033,3 +1033,44 @@ function fix_membership_search_for_custom_fields( $pieces, $wp_query ) {
     
     return $pieces;
 }
+
+
+// Real-time newsletter list sync when membership status changes
+add_action('wc_memberships_user_membership_status_changed', 'hkota_sync_newsletter_on_membership_change', 10, 3);
+function hkota_sync_newsletter_on_membership_change($user_membership, $old_status, $new_status) {
+    global $wpdb;
+    $newsletter_table = $wpdb->prefix . 'newsletter';
+    $user_id = $user_membership->get_user_id();
+
+    $subscriber = $wpdb->get_row($wpdb->prepare(
+        "SELECT id FROM {$newsletter_table} WHERE wp_user_id = %d",
+        $user_id
+    ));
+
+    if ($new_status === 'active') {
+        if ($subscriber) {
+            $wpdb->update($newsletter_table, ['list_2' => 1], ['id' => $subscriber->id]);
+        } else {
+            // Create newsletter subscriber if not yet exists
+            $user = get_userdata($user_id);
+            if ($user) {
+                $wpdb->insert($newsletter_table, [
+                    'email'      => $user->user_email,
+                    'name'       => get_user_meta($user_id, 'member_first_name_eng', true) ?: $user->first_name,
+                    'surname'    => get_user_meta($user_id, 'member_last_name_eng', true) ?: $user->last_name,
+                    'status'     => 'C',
+                    'wp_user_id' => $user_id,
+                    'list_1'     => 1,
+                    'list_2'     => 1,
+                    'referrer'   => 'wordpress',
+                    'created'    => current_time('mysql'),
+                    'token'      => wp_generate_password(12, false),
+                ]);
+            }
+        }
+    } elseif ($new_status === 'expired' || $new_status === 'cancelled') {
+        if ($subscriber) {
+            $wpdb->update($newsletter_table, ['list_2' => 0], ['id' => $subscriber->id]);
+        }
+    }
+}

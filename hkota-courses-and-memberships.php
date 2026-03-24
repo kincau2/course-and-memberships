@@ -17,7 +17,6 @@
 
 // If this file is called directly, abort.
 if ( ! defined( 'ABSPATH' ) ) exit;
-
 //composer autoload
 require __DIR__ . '/vendor/autoload.php';
 
@@ -200,5 +199,6 @@ function unschedule_fail_certificate_issuance_check() {
         wp_unschedule_event($timestamp, 'fallback_certificate_issuance');
     }
 }
+
 
 ?>
