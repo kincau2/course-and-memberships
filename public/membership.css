@@ -291,15 +291,17 @@ a{
     margin-bottom: 8px;
 }
 
-.my-course a.button {
-    font-size: 12px;
-    margin-top: 20px;
-    padding: 5px 11px;
+.my-course a.button, 
+.my-course button{
+    font-size: 12px!important;
+    margin-top: 20px!important;
+    margin: 20px 0 0 10px!important;
+    padding: 5px 11px!important;
     background: #008080!important;
     color: #FFF!important;
     text-decoration: unset!important;
-    font-weight: 600;
-    border: unset;
+    font-weight: 600!important;
+    border: unset!important;
     border-radius: unset!important;
 }
 

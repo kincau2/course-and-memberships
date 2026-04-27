@@ -57,6 +57,10 @@ $overide_cpd_point = get_post_meta( $post->ID, 'course_overide_cpd_point', true 
 $is_disable_rundown = get_post_meta( $post->ID, 'course_is_disable_rundown', true );
 $is_appendix = get_post_meta( $post->ID, 'course_is_appendix', true );
 $appendix = get_post_meta( $post->ID, 'course_appendix', true );
+$learning_material = get_post_meta( $post->ID, 'course_learning_material', true );
+if ( ! is_array( $learning_material ) ) {
+    $learning_material = array();
+}
 $poster = get_post_meta( $post->ID, 'course_poster', true );
 $qr_codes = get_post_meta( $post->ID, 'course_qr_code', true );
 $quiz = get_post_meta( $post->ID, 'course_quiz', true );
@@ -502,6 +506,7 @@ table .icon-buttons i {
                     <button class="tab-button restriction training" onclick="openTab(event, 'restriction')"><i class="fa-solid fa-filter"></i> Restriction Rules</button>
             <button class="tab-button certification training" onclick="openTab(event, 'certification')"><i class="fa-solid fa-certificate"></i> Certifications</button>
         <button class="tab-button appendix-upload training" onclick="openTab(event, 'appendix-upload')"><i class="fa-solid fa-file-arrow-up"></i> Appendix upload</button>
+        <button class="tab-button learning-material training" onclick="openTab(event, 'learning-material')"><i class="fa-solid fa-folder-open"></i> Learning Material</button>
         <button class="tab-button rundown" onclick="openTab(event, 'rundown')"><i class="fa-solid fa-filter"></i> Rundowns & CPD</button>
         <button class="tab-button quiz training" onclick="openTab(event, 'quiz')"><i class="fa-solid fa-cloud-arrow-down"></i> Quiz</button>
                     <button class="tab-button survey training" onclick="openTab(event, 'survey')"><i class="fa-solid fa-cloud-arrow-down"></i> End course survey</button>
@@ -754,6 +759,37 @@ table .icon-buttons i {
             ?>
             <span>(Filesize maximum: 5MB in pdf only)</span><br><br>
         </div>
+    </div>
+
+    <div id="learning-material" class="tab tab-content training">
+        <h3>Learning Material</h3>
+        <p>Upload PDF or image files (jpg / png) that participants can download once their course certificate has been issued. Maximum 5MB per file.</p>
+        <label for="course_learning_material">Upload files:</label>
+        <input id="course_learning_material" type="file" name="course_learning_material[]" accept=".pdf,.jpg,.jpeg,.png" multiple><br><br>
+        <?php if ( ! empty( $learning_material ) ) : ?>
+            <div class="learning-material-list">
+                <?php foreach ( $learning_material as $material_filename ) :
+                    $material_path = COURSE_FILE_DIR . $material_filename;
+                    $material_mime = file_exists( $material_path ) ? mime_content_type( $material_path ) : '';
+                    $is_image      = in_array( $material_mime, array( 'image/png', 'image/jpeg' ), true );
+                    $thumb_url     = $is_image
+                        ? home_url( '/wp-content/uploads/course-files/' ) . $material_filename
+                        : plugins_url( '/hkota-courses-and-memberships/asset/pdf-icon.png' );
+                ?>
+                    <div>
+                        <div class="course-file-preview">
+                            <a href="<?php echo esc_url( home_url( '/wp-content/uploads/course-files/' ) . $material_filename ); ?>" target="_blank">
+                                <img src="<?php echo esc_url( $thumb_url ); ?>" width="50px">
+                            </a>
+                            <i data-post-id="<?php echo $post->ID; ?>" data-input-key="course_learning_material" data-filename="<?php echo esc_attr( $material_filename ); ?>" class="fa-solid fa-circle-xmark"></i>
+                        </div>
+                        <span><?php echo esc_html( $material_filename ); ?></span>
+                        <br><br>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+        <span>(Filesize maximum: 5MB per file. Allowed types: pdf, jpg, png. Multiple files supported.)</span><br><br>
     </div>
 
     <div id="rundown" class="tab tab-content">

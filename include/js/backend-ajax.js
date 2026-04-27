@@ -4,13 +4,16 @@ jQuery(document).ready(function (e) {
 
     e.preventDefault();
 
+    var $icon = jQuery(this);
+
     jQuery.ajax({
        type : "post",
        url : hkota_backend_ajax.ajaxurl,
        data : {
          action: "delete_course_media",
-         post_id: jQuery(this).data("post-id"),
-         input_key: jQuery(this).data("input-key")
+         post_id: $icon.data("post-id"),
+         input_key: $icon.data("input-key"),
+         filename: $icon.data("filename") || ''
        },
        success: function(response) {
 
@@ -20,8 +23,13 @@ jQuery(document).ready(function (e) {
 
          if( response['success'] ){
 
-           var icon = jQuery( 'i[data-input-key='+response['input_key']+']' );
-           jQuery(icon).parent().parent().remove();
+           if ( response['input_key'] === 'course_learning_material' ) {
+             // Only remove the clicked row, since this is a multi-file field.
+             $icon.parent().parent().remove();
+           } else {
+             var icon = jQuery( 'i[data-input-key='+response['input_key']+']' );
+             jQuery(icon).parent().parent().remove();
+           }
 
          } else {
 

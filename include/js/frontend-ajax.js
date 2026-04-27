@@ -925,26 +925,67 @@ jQuery(document).ready(function (e) {
 
     jQuery(document).on('click','#export-cpd-records',function(){
 
+      // Read the on-screen date filters so the export matches the displayed range.
+      var fromDate = jQuery('input[name="cpd-from-date"]').val() || '';
+      var toDate   = jQuery('input[name="cpd-to-date"]').val() || '';
+
       jQuery.ajax({
-          url: hkota_frontend_ajax.ajaxurl, // Replace with your AJAX endpoint
+          url: hkota_frontend_ajax.ajaxurl,
           type: 'POST',
           data: {
-              action: 'fetch_user_cpd_data', // Your AJAX action
+              action: 'fetch_user_cpd_data',
+              from_date: fromDate,
+              to_date: toDate
           },
           success: function (response) {
-              if (response.success) {
-                  console.log('fired');
-                  // Convert the data to CSV
-                  const csvData = convertToCSV(response.data);
-                  // Trigger the download
-                  downloadCSV(csvData, 'exported_data.csv');
+              if (response.success && response.data && response.data.pdf) {
+                  downloadBase64Pdf(response.data.pdf, response.data.filename || 'cpd-records.pdf');
               } else {
-                  showMessage('error', response.data );
+                  showMessage('error', response.data || 'Unable to generate the CPD records PDF.');
               }
           },
           error: function () {
               showMessage('error', 'An error occurred. Please try again.');
           }
+      });
+
+    });
+
+    // Download all learning material files of a course as a single zip.
+    jQuery(document).on('click', '.download-course-material', function () {
+
+      var $btn     = jQuery(this);
+      var courseId = $btn.data('course-id');
+      if ( !courseId || $btn.prop('disabled') ) {
+        return;
+      }
+
+      $btn.prop('disabled', true);
+      var originalLabel = $btn.text();
+      $btn.text('Preparing...');
+      showMessage('notice', 'Preparing your download...');
+
+      jQuery.ajax({
+        url: hkota_frontend_ajax.ajaxurl,
+        type: 'POST',
+        data: {
+          action: 'download_course_material',
+          course_id: courseId
+        },
+        success: function (response) {
+          if (response.success && response.data && response.data.zip) {
+            downloadBase64Blob(response.data.zip, response.data.filename || 'learning-material.zip', 'application/zip');
+          } else {
+            showMessage('error', (response && response.data) ? response.data : 'Unable to download learning materials.');
+          }
+        },
+        error: function () {
+          showMessage('error', 'An error occurred. Please try again.');
+        },
+        complete: function () {
+          $btn.prop('disabled', false);
+          $btn.text(originalLabel);
+        }
       });
 
     });
@@ -968,6 +1009,31 @@ function convertToCSV(data) {
     });
 
     return rows.join('\n');
+}
+
+// Function to download a base64-encoded PDF as a file
+function downloadBase64Pdf(base64, filename) {
+    downloadBase64Blob(base64, filename, 'application/pdf');
+}
+
+// Generic helper: turn a base64 payload into a Blob and trigger a download.
+function downloadBase64Blob(base64, filename, mimeType) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mimeType || 'application/octet-stream' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 // Function to download the CSV

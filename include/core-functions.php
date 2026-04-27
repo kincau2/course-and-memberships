@@ -18,7 +18,7 @@ use transloadit\Transloadit;
 add_shortcode('debug', 'display_debug_message');
 
 function display_debug_message(){
-
+    echo "Debug mode is on.";
 }
 
 add_shortcode('login-button-message', 'login_button_message');

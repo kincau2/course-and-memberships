@@ -38,6 +38,47 @@ function delete_course_media(){
 	$post_id = stripslashes($_POST['post_id']);
   $input_key = stripslashes($_POST['input_key']);
 
+  // Special handling for the multi-file Learning Material field: remove a single
+  // entry from the serialized array rather than deleting the whole postmeta.
+  if ( $input_key === 'course_learning_material' ) {
+    $target_filename = isset( $_POST['filename'] ) ? sanitize_file_name( wp_unslash( $_POST['filename'] ) ) : '';
+    $existing        = get_post_meta( $post_id, 'course_learning_material', true );
+    if ( ! is_array( $existing ) ) {
+      $existing = array();
+    }
+
+    $remaining = array();
+    $removed   = false;
+    foreach ( $existing as $stored ) {
+      if ( ! $removed && $stored === $target_filename ) {
+        $removed = true;
+        $upload_dir = wp_upload_dir();
+        if ( ! empty( $upload_dir['basedir'] ) ) {
+          wp_delete_file( $upload_dir['basedir'] . '/course-files/' . $stored );
+        }
+        continue;
+      }
+      $remaining[] = $stored;
+    }
+
+    if ( $removed ) {
+      if ( empty( $remaining ) ) {
+        delete_post_meta( $post_id, 'course_learning_material' );
+      } else {
+        update_post_meta( $post_id, 'course_learning_material', $remaining );
+      }
+      echo json_encode( array(
+        'success'   => true,
+        'post_id'   => $post_id,
+        'input_key' => $input_key,
+        'filename'  => $target_filename,
+      ) );
+    } else {
+      echo json_encode( array( 'success' => false ) );
+    }
+    exit();
+  }
+
   $filename = get_post_meta($post_id,$input_key,true);
 
 	if( delete_post_meta($post_id,$input_key) ){
@@ -2298,46 +2339,250 @@ function admin_import_pupil_data() {
 add_action('wp_ajax_fetch_user_cpd_data', 'fetch_user_cpd_data');
 add_action('wp_ajax_nopriv_fetch_user_cpd_data', 'fetch_user_cpd_data');
 
-function fetch_user_cpd_data() {
+// AJAX: download a course's learning material as a single zip.
+// Eligibility: the current user must have certificate_status = 'issued' for
+// the requested course. Files are read from COURSE_FILE_DIR (postmeta is a
+// serialized array of basenames), zipped to a temp file, then returned as
+// base64 inside a JSON envelope so we can send proper showMessage errors.
+add_action( 'wp_ajax_download_course_material', 'download_course_material' );
 
-	// Check if the user is logged in
-	if (!is_user_logged_in()) {
-			wp_send_json_error( 'Sorry, Your current session has been logged out, please login again.');
+function download_course_material() {
+
+	if ( ! is_user_logged_in() ) {
+		wp_send_json_error( 'Please log in to download course materials.' );
 	}
 
-	$results = get_user_cpd_records();
-	$data = array();
+	$user_id   = get_current_user_id();
+	$course_id = isset( $_POST['course_id'] ) ? intval( $_POST['course_id'] ) : 0;
 
-	if($results){
-		foreach ($results as $result){
-			// Get user information
-			$user_id = $result->user_id;
-			$first_name = get_user_meta($user_id, 'first_name', true);
-			$last_name = get_user_meta($user_id, 'last_name', true);
-			$full_name = !empty($last_name) || !empty($first_name) 
-				? trim($last_name . ', ' . $first_name) 
-				: '';
-			
-			// Get OT registration number (blank if not applicable)
-			$ot_reg_number = get_user_meta($user_id, 'ot_reg_number', true);
-			
-			// Get HKOTA membership number (blank if not applicable)
-			$member_number = get_user_meta($user_id, 'member_number', true);
-			
-			$data[] = array(
-				'Full Name'			        => $full_name,
-				'OT Registration Number'    => !empty($ot_reg_number) ? $ot_reg_number : '',
-				'HKOTA Membership Number'	=> !empty($member_number) ? $member_number : '',
-				'Date'					    => $result->date_issued,
-				'Course'			    	=> $result->title,
-				'Course Code'		        => $result->code,
-				'Organization'	            => $result->organization,
-				'CPD Point'		        	=> $result->cpd_point,
+	if ( ! $course_id || get_post_type( $course_id ) !== 'course' ) {
+		wp_send_json_error( 'Invalid course.' );
+	}
+
+	$course = new Course( $course_id );
+	if ( $course->type !== 'training' ) {
+		wp_send_json_error( 'Learning materials are only available for training courses.' );
+	}
+
+	global $wpdb;
+	$enrollment_table = $wpdb->prefix . 'hkota_course_enrollment';
+	$enrollment       = $wpdb->get_row( $wpdb->prepare(
+		"SELECT certificate_status FROM $enrollment_table WHERE user_id = %d AND course_id = %d",
+		$user_id, $course_id
+	) );
+
+	if ( ! $enrollment || $enrollment->certificate_status !== 'issued' ) {
+		wp_send_json_error( 'You must be granted the course certificate before downloading the learning materials.' );
+	}
+
+	$materials = get_post_meta( $course_id, 'course_learning_material', true );
+	if ( ! is_array( $materials ) || empty( $materials ) ) {
+		wp_send_json_error( 'No learning materials are available for this course yet.' );
+	}
+
+	// Resolve to absolute paths inside COURSE_FILE_DIR; reject anything that
+	// would escape the directory (defence-in-depth — the stored values are
+	// already produced by wp_unique_filename()).
+	$course_files_dir = realpath( rtrim( COURSE_FILE_DIR, '/' ) );
+	$valid_files      = array();
+	foreach ( $materials as $stored_name ) {
+		$basename  = basename( $stored_name );
+		$full_path = realpath( COURSE_FILE_DIR . $basename );
+		if ( $full_path && $course_files_dir && strpos( $full_path, $course_files_dir ) === 0 && is_file( $full_path ) ) {
+			$valid_files[] = array(
+				'path' => $full_path,
+				'name' => $basename,
 			);
 		}
 	}
 
-	wp_send_json_success($data);
+	if ( empty( $valid_files ) ) {
+		wp_send_json_error( 'The learning material files could not be located on the server. Please contact the administrator.' );
+	}
+
+	if ( ! class_exists( 'ZipArchive' ) ) {
+		wp_send_json_error( 'Server is missing the ZipArchive extension required to package the materials.' );
+	}
+
+	$tmp_zip = wp_tempnam( 'learning-material-' . $course_id . '.zip' );
+	$zip     = new ZipArchive();
+	if ( $zip->open( $tmp_zip, ZipArchive::CREATE | ZipArchive::OVERWRITE ) !== true ) {
+		@unlink( $tmp_zip );
+		wp_send_json_error( 'Unable to prepare the download archive. Please try again.' );
+	}
+
+	foreach ( $valid_files as $entry ) {
+		$zip->addFile( $entry['path'], $entry['name'] );
+	}
+	$zip->close();
+
+	$zip_bytes = file_get_contents( $tmp_zip );
+	@unlink( $tmp_zip );
+
+	if ( $zip_bytes === false ) {
+		wp_send_json_error( 'Unable to read the prepared archive. Please try again.' );
+	}
+
+	$course_title = $course->title ? $course->title : ( 'course-' . $course_id );
+	$zip_filename = sanitize_file_name( $course_title . '-learning-material.zip' );
+
+	wp_send_json_success( array(
+		'filename' => $zip_filename,
+		'zip'      => base64_encode( $zip_bytes ),
+	) );
+}
+
+function fetch_user_cpd_data() {
+
+	// Check if the user is logged in
+	if (!is_user_logged_in()) {
+		wp_send_json_error( 'Sorry, Your current session has been logged out, please login again.');
+	}
+
+	$user_id = get_current_user_id();
+
+	// Resolve the requested period (defaults match the on-screen filter: from Jan 1 of current year to today).
+	$default_from = ( (int) date( 'Y' ) ) . '-01-01';
+	$default_to   = date( 'Y-m-d' );
+
+	$from_date = isset( $_POST['from_date'] ) && ! empty( $_POST['from_date'] )
+		? sanitize_text_field( $_POST['from_date'] )
+		: $default_from;
+	$to_date = isset( $_POST['to_date'] ) && ! empty( $_POST['to_date'] )
+		? sanitize_text_field( $_POST['to_date'] )
+		: $default_to;
+
+	// Basic format validation; fall back to defaults on bad input.
+	if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $from_date ) ) {
+		$from_date = $default_from;
+	}
+	if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $to_date ) ) {
+		$to_date = $default_to;
+	}
+
+	// Personal particulars
+	$first_name    = get_user_meta( $user_id, 'first_name', true );
+	$last_name     = get_user_meta( $user_id, 'last_name', true );
+	$full_name     = ( ! empty( $last_name ) || ! empty( $first_name ) )
+		? trim( $last_name . ', ' . $first_name )
+		: '';
+	$ot_reg_number = get_user_meta( $user_id, 'ot_reg_number', true );
+	$member_number = get_user_meta( $user_id, 'member_number', true );
+
+	// Fetch issued CPD records for the user, filtered by date range.
+	$results = get_user_cpd_records( 'issued', $user_id );
+	$records = array();
+
+	if ( $results ) {
+		$from_ts = strtotime( $from_date );
+		$to_ts   = strtotime( $to_date . ' 23:59:59' );
+
+		foreach ( $results as $result ) {
+			// Determine the record date: prefer the course's last rundown date,
+			// matching the behaviour shown on the CPD records table.
+			$record_date = $result->date_issued;
+			if ( ! empty( $result->course_id ) ) {
+				$course = new Course( $result->course_id );
+				if ( ! empty( $course->rundown ) && is_array( $course->rundown ) ) {
+					$rundown_sorted = $course->rundown;
+					usort( $rundown_sorted, function( $a, $b ) {
+						return strtotime( $b['date'] ) - strtotime( $a['date'] );
+					} );
+					$record_date = date( 'Y-m-d', strtotime( $rundown_sorted[0]['date'] ) );
+				}
+			}
+
+			$record_ts = strtotime( $record_date );
+			if ( $record_ts === false || $record_ts < $from_ts || $record_ts > $to_ts ) {
+				continue;
+			}
+
+			$records[] = array(
+				'date'         => $record_date,
+				'course'       => $result->title,
+				'code'         => $result->code,
+				'organization' => $result->organization,
+				'cpd_point'    => $result->cpd_point,
+				'_sort'        => $record_ts,
+			);
+		}
+
+		// Sort by date descending, mirroring the on-screen listing.
+		usort( $records, function( $a, $b ) {
+			return $b['_sort'] - $a['_sort'];
+		} );
+		foreach ( $records as &$r ) {
+			unset( $r['_sort'] );
+		}
+		unset( $r );
+	}
+
+	// Render the PDF using the same Dompdf approach as create_certificate().
+	ob_start();
+	$template_args = array(
+		'full_name'     => $full_name,
+		'ot_reg_number' => $ot_reg_number,
+		'member_number' => $member_number,
+		'period_from'   => $from_date,
+		'period_to'     => $to_date,
+		'records'       => $records,
+	);
+	load_template( HKOTA_PLUGIN_DIR . '/template/cpd-records-export.php', true, $template_args );
+	$html_content = ob_get_clean();
+    $watermark_path = HKOTA_PLUGIN_DIR . '/asset/hkota_logo.png';
+    if ( ! file_exists( $watermark_path ) ) {
+        $watermark_path = '';
+    }
+
+	$options = new \Dompdf\Options();
+	$options->set( 'isHtml5ParserEnabled', true );
+	$options->set( 'isRemoteEnabled', true );
+
+	$dompdf = new \Dompdf\Dompdf( $options );
+    $dompdf->setCallbacks(
+        array(
+            array(
+                'event' => 'end_document',
+                'f'     => function ( $page_number, $page_count, $canvas, $font_metrics ) use ( $watermark_path ) {
+                    if ( $watermark_path ) {
+                        $watermark_width  = 350;
+                        $watermark_height = 350;
+                        $watermark_x      = ( $canvas->get_width() - $watermark_width ) / 2;
+                        $watermark_y      = ( $canvas->get_height() - $watermark_height ) / 2;
+
+                        $canvas->set_opacity( 0.08 );
+                        $canvas->image( $watermark_path, $watermark_x, $watermark_y, $watermark_width, $watermark_height );
+                        $canvas->set_opacity( 1.0 );
+                    }
+
+                    $font       = $font_metrics->get_font( 'DejaVu Sans', 'normal' );
+                    $font_size  = 9;
+                    $page_label = 'Page ' . $page_number . ' / ' . $page_count;
+                    $text_width = $font_metrics->getTextWidth( $page_label, $font, $font_size );
+
+                    $canvas->text(
+                        ( $canvas->get_width() - $text_width ) / 2,
+                        $canvas->get_height() - 18,
+                        $page_label,
+                        $font,
+                        $font_size,
+                        array( 0.45, 0.45, 0.45 )
+                    );
+                },
+            ),
+        )
+    );
+	$dompdf->loadHtml( $html_content );
+	$dompdf->setPaper( 'A4', 'portrait' );
+	$dompdf->render();
+	$pdf_output = $dompdf->output();
+
+	$filename = 'cpd-records-' . $from_date . '-to-' . $to_date . '.pdf';
+
+	wp_send_json_success( array(
+		'filename' => $filename,
+		'pdf'      => base64_encode( $pdf_output ),
+	) );
 
 }
 

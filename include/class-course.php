@@ -1290,6 +1290,34 @@ class Course {
     }
   }
 
+  // Display "Download Materials" button next to the certificate button.
+  // Visible only when the course is a training course, has at least one learning
+  // material file uploaded, and the user has been granted the certificate.
+  public function display_learning_material_button( $user_id ) {
+    global $wpdb;
+
+    if ( $this->type !== 'training' ) {
+      return;
+    }
+
+    $materials = get_post_meta( $this->id, 'course_learning_material', true );
+    if ( ! is_array( $materials ) || empty( $materials ) ) {
+      return;
+    }
+
+    $table_name      = $wpdb->prefix . 'hkota_course_enrollment';
+    $enrollment_data = $wpdb->get_row( $wpdb->prepare(
+      "SELECT certificate_status FROM $table_name WHERE user_id = %d AND course_id = %d",
+      $user_id, $this->id
+    ) );
+
+    if ( ! $enrollment_data || $enrollment_data->certificate_status !== 'issued' ) {
+      return;
+    }
+
+    echo '<button type="button" class="button download-course-material" data-course-id="' . esc_attr( $this->id ) . '">Download Materials</button>';
+  }
+
   // create certificate if pupil meet requirement
   public function create_certificate($user_id) {
 

@@ -212,6 +212,10 @@ function save_course_meta( $post_id, $post ) {
 	// File handling
 	$admin_notice = upload_file_handling($post_id,$_FILES,$admin_notice);
 
+	// Multi-file handling for the Learning Material tab. Stored as a serialized
+	// array of filenames in the `course_learning_material` postmeta.
+	$admin_notice = upload_learning_material_handling( $post_id, $_FILES, $admin_notice );
+
   $course = new Course($post->ID);
 
   if( isset($_FILES['course_external_poster']) ){
@@ -323,6 +327,10 @@ function upload_file_handling($post_id,$files,$admin_notice){
 
 	foreach ( $files as $Key => $file) {
 
+		if ( $Key === 'course_learning_material' ) {
+			continue; // handled separately by upload_learning_material_handling()
+		}
+
 		if( !empty( $file['name'] ) && empty( $file['error'] ) ) {
 
 			$filepath = $file['tmp_name'];
@@ -402,6 +410,99 @@ function upload_file_handling($post_id,$files,$admin_notice){
 	}
 
 
+
+	return $admin_notice;
+}
+
+// Handle multiple files uploaded under <input name="course_learning_material[]" multiple>.
+// Files are validated (PDF / JPG / PNG, max 5MB each), moved to COURSE_FILE_DIR, and the
+// resulting filenames are appended to the existing serialized array stored in postmeta.
+function upload_learning_material_handling( $post_id, $files, $admin_notice ) {
+
+	if ( empty( $files['course_learning_material'] ) || empty( $files['course_learning_material']['name'] ) ) {
+		return $admin_notice;
+	}
+
+	$file_field = $files['course_learning_material'];
+
+	// Single-file uploads still arrive as scalars; normalize into arrays.
+	if ( ! is_array( $file_field['name'] ) ) {
+		$file_field = array(
+			'name'     => array( $file_field['name'] ),
+			'type'     => array( $file_field['type'] ),
+			'tmp_name' => array( $file_field['tmp_name'] ),
+			'error'    => array( $file_field['error'] ),
+			'size'     => array( $file_field['size'] ),
+		);
+	}
+
+	$existing = get_post_meta( $post_id, 'course_learning_material', true );
+	if ( ! is_array( $existing ) ) {
+		$existing = array();
+	}
+
+	$allowed_types = array(
+		'image/png'       => 'png',
+		'image/jpeg'      => 'jpg',
+		'application/pdf' => 'pdf',
+	);
+
+	$file_count = count( $file_field['name'] );
+	for ( $i = 0; $i < $file_count; $i++ ) {
+
+		$original_name = $file_field['name'][ $i ];
+		$tmp_path      = $file_field['tmp_name'][ $i ];
+		$error_code    = $file_field['error'][ $i ];
+
+		if ( empty( $original_name ) || $error_code !== UPLOAD_ERR_OK || ! is_uploaded_file( $tmp_path ) ) {
+			continue;
+		}
+
+		$file_size = filesize( $tmp_path );
+		if ( $file_size === 0 ) {
+			$admin_notice[] = array(
+				'type'    => 'error',
+				'message' => 'Error: Learning material file "' . $original_name . '" is empty.',
+			);
+			continue;
+		}
+
+		if ( $file_size > 5242880 ) {
+			$admin_notice[] = array(
+				'type'    => 'error',
+				'message' => 'Error: Learning material file "' . $original_name . '" exceeds 5MB.',
+			);
+			continue;
+		}
+
+		$fileinfo = finfo_open( FILEINFO_MIME_TYPE );
+		$filetype = finfo_file( $fileinfo, $tmp_path );
+		finfo_close( $fileinfo );
+
+		if ( ! isset( $allowed_types[ $filetype ] ) ) {
+			$admin_notice[] = array(
+				'type'    => 'error',
+				'message' => 'Error: Learning material file "' . $original_name . '" must be PDF, JPG, or PNG.',
+			);
+			continue;
+		}
+
+		$upload_dir = wp_upload_dir();
+		if ( empty( $upload_dir['basedir'] ) ) {
+			continue;
+		}
+
+		$course_file_dir = $upload_dir['basedir'] . '/course-files';
+		$filename        = wp_unique_filename( $course_file_dir, sanitize_file_name( $original_name ) );
+
+		if ( move_uploaded_file( $tmp_path, COURSE_FILE_DIR . $filename ) ) {
+			$existing[] = $filename;
+		}
+	}
+
+	if ( ! empty( $existing ) ) {
+		update_post_meta( $post_id, 'course_learning_material', $existing );
+	}
 
 	return $admin_notice;
 }

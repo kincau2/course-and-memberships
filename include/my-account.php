@@ -153,11 +153,14 @@ function my_courses_content() {
           <?php endif; ?>
             <div class="details-row footer-button">
               <a class="button" href="<?php echo $course->get_ical_url() ; ?>" download>Add to you calendar</a>
-              <?php
-                if($course->type == 'training' ){
-                  $course->display_certificate_button($user_id);
-                }
-              ?>
+              <div class="button-wrapper">
+                <?php
+                  if($course->type == 'training' ){
+                    $course->display_learning_material_button($user_id);
+                    $course->display_certificate_button($user_id);
+                  }
+                ?>
+              </div>
             </div>
           <?php if( $course->type == 'co-organized-event' && $course->is_issue_cpd == 'true' ): ?>
             <br>
