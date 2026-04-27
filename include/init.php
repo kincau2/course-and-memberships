@@ -11,6 +11,7 @@ include dirname(__FILE__) . '/core-functions.php' ;
 include dirname(__FILE__) . '/my-account.php' ;
 include dirname(__FILE__) . '/user-registration.php' ;
 include dirname(__FILE__) . '/capability.php' ;
+include dirname(__FILE__) . '/newsletter-automation.php' ;
 
 add_action( 'wp_enqueue_scripts', 'hkota_enqueue_plugin_assets', 20 );
 add_action( 'admin_enqueue_scripts', 'hkota_enqueue_plugin_assets', 20 );
