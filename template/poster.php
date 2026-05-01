@@ -8,7 +8,14 @@ $course_id = $_GET['course_id'];
 $course = new Course( $course_id );
 
 // Load Chinese font for Traditional Chinese character support
-$chinese_font_config = include(HKOTA_PLUGIN_DIR . '/asset/fonts/noto-sans-tc-base64.php');
+$chinese_font_config = array( 'type' => '', 'css' => '', 'data' => '' );
+$_chinese_font_path  = HKOTA_PLUGIN_DIR . '/asset/fonts/noto-sans-tc-base64.php';
+if ( file_exists( $_chinese_font_path ) ) {
+  $_loaded_font_config = include( $_chinese_font_path );
+  if ( is_array( $_loaded_font_config ) ) {
+    $chinese_font_config = array_merge( $chinese_font_config, $_loaded_font_config );
+  }
+}
 
 ?>
 
@@ -93,7 +100,7 @@ $chinese_font_config = include(HKOTA_PLUGIN_DIR . '/asset/fonts/noto-sans-tc-bas
             vertical-align: top;
           }
           .spacer{
-            height: 20px;
+            height: 12px;
           }
           .red{
             color:red;
@@ -103,26 +110,21 @@ $chinese_font_config = include(HKOTA_PLUGIN_DIR . '/asset/fonts/noto-sans-tc-bas
           }
 
           .heading-wrapper{
-            margin-bottom: 40px;
+            margin-bottom: 20px;
+          }
+          .logo-wrapper{
+            text-align: center;
+          }
+          .logo-wrapper img{
+            display:inline-block;
+            width:30%;
+            margin: 10px 20px;
+            vertical-align: middle;
           }
 
-          .logo-left{
-            display:inline-block;
-            width:100px;
-            padding: 0 10px 0 0;
-            vertical-align: top;
-          }
-          .logo-right{
-            display:inline-block;
-            width:100px;
-            padding: 0 0 10px 0;
-            vertical-align: top;
-          }
           .course-title{
             display:inline-block;
-            <?php echo ($course->is_co_organized)? "max-width: 438px;" : "max-width: 550px;" ;?>
-            <?php echo ($course->is_co_organized)? "padding: 20px 10px 0 10px;" : "padding: 20px 0 0 10px;" ;?>
-            vertical-align: top;
+            width:100%;
             line-height: 18px;
           }
           .info-wrapper{
@@ -138,21 +140,21 @@ $chinese_font_config = include(HKOTA_PLUGIN_DIR . '/asset/fonts/noto-sans-tc-bas
             max-width: 590px!important;
           }
           .info-type{
-            font-size: 18px!important;
+            font-size: 16px!important;
             margin-right: 5px;
             width: 100px!important;
             font-weight: 600!important;
             margin-top: 50px!important;
           }
           .info-type-small{
-            font-size: 16.5px!important;
+            font-size: 15px!important;
             margin-right: 5px;
             width: 100px!important;
             font-weight: 600!important;
             margin-top: 5px!important;
           }
           .info-data{
-            font-size: 16.5px!important;
+            font-size: 14px!important;
             word-wrap: break-word;
             font-weight: 500!important;
             margin-bottom: 0px!important;
@@ -203,19 +205,33 @@ $chinese_font_config = include(HKOTA_PLUGIN_DIR . '/asset/fonts/noto-sans-tc-bas
       </head>
       <body>
         <!-- <div class="page-wrapper"> -->
-          <div class="heading-wrapper">
+          <div class="logo-wrapper">
             <?php
-
-            $image_path = HKOTA_PLUGIN_DIR . '/asset/hkota_logo.png';
-            if (file_exists($image_path)) {
-                $image_data = file_get_contents($image_path);
-                $file_info = getimagesize($image_path);
-                $mime_type = $file_info['mime'];
-                $base64 = 'data:'.$mime_type.';base64,' . base64_encode($image_data);
-            }
-
+              $image_path = HKOTA_PLUGIN_DIR . '/asset/hkota-logo-new.png';
+              if (file_exists($image_path)) {
+                  $image_data = file_get_contents($image_path);
+                  $file_info = getimagesize($image_path);
+                  $mime_type = $file_info['mime'];
+                  $base64 = 'data:'.$mime_type.';base64,' . base64_encode($image_data);
+              }
             ?>
-            <img class="logo-left" src="<?php echo $base64; ?>" width="100px">
+            <img src="<?php echo $base64; ?>">
+            <?php
+              if($course->is_co_organized){
+                $image_path = COURSE_FILE_DIR . $course->co_organizer_logo ;
+                if (file_exists($image_path)) {
+                    $image_data = file_get_contents($image_path);
+                    $file_info = getimagesize($image_path);
+                    $mime_type = $file_info['mime'];
+                    $base64 = 'data:'.$mime_type.';base64,' . base64_encode($image_data);
+                }
+                ?>
+                  <img src="<?php echo $base64 ;?>" width="100px">
+                <?php
+              }
+            ?>
+          </div>
+          <div class="heading-wrapper">
             <div class="course-title text-center">
               <h1 class="text-center mb-10"><?php echo $course->title ;?></h1>
               <h4 class="text-center green">(Course Code:<?php echo $course->code ;?>)</h4>
@@ -228,25 +244,11 @@ $chinese_font_config = include(HKOTA_PLUGIN_DIR . '/asset/fonts/noto-sans-tc-bas
                 }
               ?>
             </div>
-            <?php
-              if($course->is_co_organized){
-                $image_path = COURSE_FILE_DIR . $course->co_organizer_logo ;
-                if (file_exists($image_path)) {
-                    $image_data = file_get_contents($image_path);
-                    $file_info = getimagesize($image_path);
-                    $mime_type = $file_info['mime'];
-                    $base64 = 'data:'.$mime_type.';base64,' . base64_encode($image_data);
-                }
-                ?>
-                  <img class="logo-right" src="<?php echo $base64 ;?>" width="100px">
-                <?php
-              }
-
-              $dates = $course->createDateString();
-              $time = $course->createTimeString();
-
-            ?>
           </div>
+          <?php 
+            $dates = $course->createDateString();
+            $time = $course->createTimeString();
+          ?>
           <div class="info-wrapper">
             <div class="inline"><span class="info-type purple">Date: </span></div>
             <div class="inline"><span class="info-data "><?php echo $dates ;?></span></div>

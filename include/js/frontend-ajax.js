@@ -925,9 +925,11 @@ jQuery(document).ready(function (e) {
 
     jQuery(document).on('click','#export-cpd-records',function(){
 
-      // Read the on-screen date filters so the export matches the displayed range.
-      var fromDate = jQuery('input[name="cpd-from-date"]').val() || '';
-      var toDate   = jQuery('input[name="cpd-to-date"]').val() || '';
+      // Read the period select so the export matches the displayed range.
+      var periodVal = jQuery('select[name="cpd-period"]').val() || '';
+      var parts     = periodVal.split('|');
+      var fromDate  = parts[0] || '';
+      var toDate    = parts[1] || '';
 
       jQuery.ajax({
           url: hkota_frontend_ajax.ajaxurl,

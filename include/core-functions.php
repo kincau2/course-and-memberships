@@ -1238,17 +1238,68 @@ function generate_poster(){
 
     if( $is_appendix && !empty($appendix) ){
 
+      $poster_tmp   = $course_poster_dir . "/" . "tem_" . $filename;
+      $merged_tmp   = $course_poster_dir . "/" . "tem__" . $filename;
+      $appendix_src = $upload_dir['basedir'] . '/course-files/' . $appendix;
+
       //save merged file
-      file_put_contents($course_poster_dir . "/" . "tem_" . $filename, $pdf_output);
+      file_put_contents( $poster_tmp, $pdf_output );
 
-      $pdf = new \Jurosh\PDFMerge\PDFMerger;
+      $merge_appendix = function( $appendix_path ) use ( $poster_tmp, $merged_tmp ) {
+        $pdf = new \Jurosh\PDFMerge\PDFMerger;
+        $pdf->addPDF( $poster_tmp, 'all', 'vertical' )
+            ->addPDF( $appendix_path, 'all' );
+        $pdf->merge( 'file', $merged_tmp );
+      };
 
-      $pdf->addPDF($course_poster_dir . "/" . "tem_" . $filename , 'all', 'vertical')
-          ->addPDF( $upload_dir['basedir'] . '/course-files/' . $appendix , 'all');
+      $merged_ok = false;
+      try {
+        $merge_appendix( $appendix_src );
+        $merged_ok = true;
+      } catch ( \Exception $e ) {
+        // FPDI free version cannot parse PDFs that use compressed cross-reference
+        // streams (PDF 1.5+). Try re-saving the appendix via Ghostscript so it
+        // becomes a plain xref table that FPDI can read.
+        $gs = trim( (string) shell_exec( 'which gs 2>/dev/null' ) );
+        if ( ! empty( $gs ) ) {
+          $rewritten = $course_poster_dir . "/" . "tem_appx_" . $filename;
+          $gs_cmd = escapeshellcmd( $gs )
+            . ' -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -dCompatibilityLevel=1.4'
+            . ' -dPDFSETTINGS=/prepress -sOutputFile=' . escapeshellarg( $rewritten )
+            . ' ' . escapeshellarg( $appendix_src ) . ' 2>&1';
+          shell_exec( $gs_cmd );
+          if ( file_exists( $rewritten ) && filesize( $rewritten ) > 0 ) {
+            try {
+              $merge_appendix( $rewritten );
+              $merged_ok = true;
+            } catch ( \Exception $e2 ) {
+              error_log( 'generate_poster: appendix merge failed after Ghostscript rewrite for course ' . $course_id . ' - ' . $e2->getMessage() );
+            }
+            wp_delete_file( $rewritten );
+          } else {
+            error_log( 'generate_poster: Ghostscript could not rewrite appendix for course ' . $course_id );
+          }
+        } else {
+          error_log( 'generate_poster: appendix merge failed for course ' . $course_id . ' (no Ghostscript available) - ' . $e->getMessage() );
+        }
+      }
 
-      $pdf->merge('file', $course_poster_dir . "/" . "tem__" . $filename );
+      if ( ! $merged_ok ) {
+        // Fall back to the poster-only output and warn the admin via the
+        // shared admin_notice transient (rendered on the next admin page).
+        file_put_contents( $merged_tmp, $pdf_output );
+        $existing_notices = get_transient( 'admin_notice' );
+        if ( ! is_array( $existing_notices ) ) {
+          $existing_notices = array();
+        }
+        $existing_notices[] = array(
+          'type'    => 'error',
+          'message' => 'The appendix PDF could not be merged into the poster (its format is unsupported by FPDI). The poster has been generated without the appendix. Please re-save the appendix as PDF 1.4 (e.g. "Reduce File Size" / "Standard" / "Print" preset) and re-upload it.',
+        );
+        set_transient( 'admin_notice', $existing_notices, 60 );
+      }
 
-      wp_delete_file( $course_poster_dir . "/" . "tem_" . $filename );
+      wp_delete_file( $poster_tmp );
 
     } else {
 

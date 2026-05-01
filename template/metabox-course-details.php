@@ -178,6 +178,24 @@ th {
     color: #ff0000;
     cursor: pointer;
 }
+.upload-progress-wrap {
+    max-width: 350px;
+}
+.upload-progress-bar {
+    height: 8px;
+    background: #2271b1;
+    width: 0%;
+    border-radius: 4px;
+    transition: width 0.15s ease;
+}
+.upload-progress-label {
+    font-size: 12px;
+    color: #555;
+}
+.upload-error-label {
+    font-size: 12px;
+    color: #cc0000;
+}
 table .time {
     width: 200px;
 }
@@ -532,7 +550,16 @@ table .icon-buttons i {
         <textarea id="course_target_participants" name="course_target_participants" ><?php echo $target_participants ?></textarea><br><br>
         <div class="event co-organized">
             <label for="course_external_poster">Upload poster:</label>
-            <input id="course_external_poster" type="file" name="course_external_poster"><br><br>
+            <input id="course_external_poster" type="file"
+                data-upload-ajax="1"
+                data-post-id="<?php echo $post->ID; ?>"
+                data-input-key="course_external_poster"
+                accept=".pdf,.jpg,.jpeg,.png"><br>
+            <div class="upload-progress-wrap" id="progress-course_external_poster" style="display:none;margin:4px 0 8px;">
+                <div class="upload-progress-bar"></div>
+                <span class="upload-progress-label">Uploading…</span>
+            </div><br>
+            <div id="preview-course_external_poster">
             <?php
             if( !empty( $external_poster ) ){
                 ?>
@@ -561,6 +588,7 @@ table .icon-buttons i {
                 <?php
             }
             ?>
+            </div>
             <span>(Filesize maximum: 5MB in jpg/png/pdf only)</span><br><br>
         </div>
     </div>
@@ -648,7 +676,16 @@ table .icon-buttons i {
             <label for="course_co_organizer_title">Co-organizer title:</label>
             <input type="text" id="course_co_organizer_title" name="course_co_organizer_title" value="<?php echo $co_organizer_title ?>"><br><br>
             <label for="course_co_organizer_logo">Co-organizer logo:</label>
-            <input id="course_co_organizer_logo" type="file" name="course_co_organizer_logo" ><br><br>
+            <input id="course_co_organizer_logo" type="file"
+                data-upload-ajax="1"
+                data-post-id="<?php echo $post->ID; ?>"
+                data-input-key="course_co_organizer_logo"
+                accept=".jpg,.jpeg,.png"><br>
+            <div class="upload-progress-wrap" id="progress-course_co_organizer_logo" style="display:none;margin:4px 0 8px;">
+                <div class="upload-progress-bar"></div>
+                <span class="upload-progress-label">Uploading…</span>
+            </div><br>
+            <div id="preview-course_co_organizer_logo">
             <?php
             if( !empty( $co_organizer_logo ) ){
                 ?>
@@ -665,6 +702,7 @@ table .icon-buttons i {
                 <?php
             }
             ?>
+            </div>
             <span>(Filesize maximum: 5MB in jpg/png only)</span><br><br>
             </div>
             <label for="course_cert_heading">Certificate Heading:</label>
@@ -682,7 +720,16 @@ table .icon-buttons i {
             <label class="textarea-label" for="course_cert_signee_1">Signee Title:</label>
             <textarea type="text" id="course_cert_signee_1" name="course_cert_signee_1"><?php echo htmlspecialchars($cert_signee_1); ?></textarea><br><br>
             <label for="course_cert_signature_1">Signature image:</label>
-            <input id="course_cert_signature_1" type="file" name="course_cert_signature_1"><br><br>
+            <input id="course_cert_signature_1" type="file"
+                data-upload-ajax="1"
+                data-post-id="<?php echo $post->ID; ?>"
+                data-input-key="course_cert_signature_1"
+                accept=".jpg,.jpeg,.png"><br>
+            <div class="upload-progress-wrap" id="progress-course_cert_signature_1" style="display:none;margin:4px 0 8px;">
+                <div class="upload-progress-bar"></div>
+                <span class="upload-progress-label">Uploading…</span>
+            </div><br>
+            <div id="preview-course_cert_signature_1">
             <?php
             if( !empty( $cert_signature_1 ) ){
             ?>
@@ -699,6 +746,7 @@ table .icon-buttons i {
             <?php
             }
             ?>
+            </div>
             <span>(Filesize maximum: 5MB in jpg/png only)</span><br><br>
             <label for="course_is_second_signee">Second Signee:</label>
             <input type="checkbox" value="true" id="course_is_second_signee" name="course_is_second_signee" class="trigger" <?php echo ($is_second_signee) ? "checked" : "" ; ?>>
@@ -707,7 +755,16 @@ table .icon-buttons i {
             <label class="textarea-label" for="course_cert_signee_2">Second Signee Title:</label>
             <textarea type="text" id="course_cert_signee_2" name="course_cert_signee_2"><?php echo $cert_signee_2 ?></textarea><br><br>
             <label for="course_cert_signature_2">Second Signature image:</label>
-            <input id="course_cert_signature_2" type="file" name="course_cert_signature_2"><br><br>
+            <input id="course_cert_signature_2" type="file"
+                data-upload-ajax="1"
+                data-post-id="<?php echo $post->ID; ?>"
+                data-input-key="course_cert_signature_2"
+                accept=".jpg,.jpeg,.png"><br>
+            <div class="upload-progress-wrap" id="progress-course_cert_signature_2" style="display:none;margin:4px 0 8px;">
+                <div class="upload-progress-bar"></div>
+                <span class="upload-progress-label">Uploading…</span>
+            </div><br>
+            <div id="preview-course_cert_signature_2">
             <?php
             if( !empty( $cert_signature_2 ) ){
                 ?>
@@ -724,10 +781,11 @@ table .icon-buttons i {
                 <?php
             }
             ?>
+            </div>
             <span>(Filesize maximum: 5MB in jpg/png only)</span><br><br>
         </div>
 
-        <a id="get-poster" target="_blank" href="/wp-admin/admin-post.php?action=preview_certificate&course_id=<?php echo $post->ID ?>">
+        <a target="_blank" href="/wp-admin/admin-post.php?action=preview_certificate&course_id=<?php echo $post->ID ?>">
             <button type="button" class="button button-primary">Preview Certificate</button>
         </a><br><br>
 
@@ -740,7 +798,16 @@ table .icon-buttons i {
         <span>Enable appendix for this course.</span><br><br>
         <div id="course_is_appendix_details" <?php echo ($is_appendix) ? "" : 'style="display:none;"' ; ?>>
             <label for="course_appendix">Upload appendix:</label>
-            <input id="course_appendix" type="file" name="course_appendix"><br><br>
+            <input id="course_appendix" type="file"
+                data-upload-ajax="1"
+                data-post-id="<?php echo $post->ID; ?>"
+                data-input-key="course_appendix"
+                accept=".pdf"><br>
+            <div class="upload-progress-wrap" id="progress-course_appendix" style="display:none;margin:4px 0 8px;">
+                <div class="upload-progress-bar"></div>
+                <span class="upload-progress-label">Uploading…</span>
+            </div><br>
+            <div id="preview-course_appendix">
             <?php
             if( !empty( $appendix ) ){
                 ?>
@@ -757,6 +824,7 @@ table .icon-buttons i {
                 <?php
             }
             ?>
+            </div>
             <span>(Filesize maximum: 5MB in pdf only)</span><br><br>
         </div>
     </div>
@@ -765,30 +833,36 @@ table .icon-buttons i {
         <h3>Learning Material</h3>
         <p>Upload PDF or image files (jpg / png) that participants can download once their course certificate has been issued. Maximum 5MB per file.</p>
         <label for="course_learning_material">Upload files:</label>
-        <input id="course_learning_material" type="file" name="course_learning_material[]" accept=".pdf,.jpg,.jpeg,.png" multiple><br><br>
-        <?php if ( ! empty( $learning_material ) ) : ?>
-            <div class="learning-material-list">
-                <?php foreach ( $learning_material as $material_filename ) :
-                    $material_path = COURSE_FILE_DIR . $material_filename;
-                    $material_mime = file_exists( $material_path ) ? mime_content_type( $material_path ) : '';
-                    $is_image      = in_array( $material_mime, array( 'image/png', 'image/jpeg' ), true );
-                    $thumb_url     = $is_image
-                        ? home_url( '/wp-content/uploads/course-files/' ) . $material_filename
-                        : plugins_url( '/hkota-courses-and-memberships/asset/pdf-icon.png' );
-                ?>
-                    <div>
-                        <div class="course-file-preview">
-                            <a href="<?php echo esc_url( home_url( '/wp-content/uploads/course-files/' ) . $material_filename ); ?>" target="_blank">
-                                <img src="<?php echo esc_url( $thumb_url ); ?>" width="50px">
-                            </a>
-                            <i data-post-id="<?php echo $post->ID; ?>" data-input-key="course_learning_material" data-filename="<?php echo esc_attr( $material_filename ); ?>" class="fa-solid fa-circle-xmark"></i>
-                        </div>
-                        <span><?php echo esc_html( $material_filename ); ?></span>
-                        <br><br>
+        <input id="course_learning_material" type="file"
+            data-upload-ajax="1"
+            data-post-id="<?php echo $post->ID; ?>"
+            data-input-key="course_learning_material"
+            accept=".pdf,.jpg,.jpeg,.png" multiple><br>
+        <div class="upload-progress-wrap" id="progress-course_learning_material" style="display:none;margin:4px 0 8px;">
+            <div class="upload-progress-bar"></div>
+            <span class="upload-progress-label">Uploading…</span>
+        </div><br>
+        <div id="preview-course_learning_material" class="learning-material-list">
+            <?php foreach ( $learning_material as $material_filename ) :
+                $material_path = COURSE_FILE_DIR . $material_filename;
+                $material_mime = file_exists( $material_path ) ? mime_content_type( $material_path ) : '';
+                $is_image      = in_array( $material_mime, array( 'image/png', 'image/jpeg' ), true );
+                $thumb_url     = $is_image
+                    ? home_url( '/wp-content/uploads/course-files/' ) . $material_filename
+                    : plugins_url( '/hkota-courses-and-memberships/asset/pdf-icon.png' );
+            ?>
+                <div>
+                    <div class="course-file-preview">
+                        <a href="<?php echo esc_url( home_url( '/wp-content/uploads/course-files/' ) . $material_filename ); ?>" target="_blank">
+                            <img src="<?php echo esc_url( $thumb_url ); ?>" width="50px">
+                        </a>
+                        <i data-post-id="<?php echo $post->ID; ?>" data-input-key="course_learning_material" data-filename="<?php echo esc_attr( $material_filename ); ?>" class="fa-solid fa-circle-xmark"></i>
                     </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+                    <span><?php echo esc_html( $material_filename ); ?></span>
+                    <br><br>
+                </div>
+            <?php endforeach; ?>
+        </div>
         <span>(Filesize maximum: 5MB per file. Allowed types: pdf, jpg, png. Multiple files supported.)</span><br><br>
     </div>
 

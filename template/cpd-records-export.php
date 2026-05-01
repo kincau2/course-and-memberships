@@ -208,10 +208,16 @@ if ( file_exists( $logo_path ) ) {
             <td>
                 <?php
                 if ( $period_from && $period_to ) {
-                    echo esc_html( $period_from ) . ' to ' . esc_html( $period_to );
+                    $fmt_from = date( 'jMY', strtotime( $period_from ) );
+                    $fmt_to   = date( 'jMY', strtotime( $period_to ) );
+                    echo esc_html( $fmt_from . '-' . $fmt_to );
                 }
                 ?>
             </td>
+        </tr>
+        <tr>
+            <td class="label">Total CPD Points</td>
+            <td><?php echo esc_html( array_sum( array_column( $records, 'cpd_point' ) ) ); ?></td>
         </tr>
     </table>
 

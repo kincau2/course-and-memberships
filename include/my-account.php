@@ -176,6 +176,27 @@ function my_courses_content() {
   <?php
 }
 
+// Build the list of CPD period options: current period + 5 previous periods.
+// Each period runs from 1 July to 30 June of the following year.
+// Returns an array of [ 'value' => 'YYYY-MM-DD|YYYY-MM-DD', 'label' => '1JulYYYY-30JunYYYY' ]
+function get_cpd_period_options() {
+    $month = (int) date( 'n' );
+    $year  = (int) date( 'Y' );
+    // If we have passed 30 Jun, the current period starts this July; otherwise last July.
+    $current_start_year = ( $month >= 7 ) ? $year : $year - 1;
+
+    $options = array();
+    for ( $i = 0; $i <= 5; $i++ ) {
+        $start_year = $current_start_year - $i;
+        $end_year   = $start_year + 1;
+        $options[] = array(
+            'value' => $start_year . '-07-01|' . $end_year . '-06-30',
+            'label' => '1Jul' . $start_year . '-30Jun' . $end_year,
+        );
+    }
+    return $options;
+}
+
 add_action( 'init', 'add_cpd_endpoint' );
 
 function add_cpd_endpoint() {
@@ -185,38 +206,22 @@ function add_cpd_endpoint() {
 add_action('woocommerce_account_cpd-records_endpoint', 'cpd_records_content');
 function cpd_records_content() {
 
-  $from_date = (int)date('Y');
-  $from_date = strtotime( $from_date.'-01-01' );
-  $to_date = strtotime( date( 'Y-m-d' ) );
+  $cpd_periods      = get_cpd_period_options();
+  $default_period   = $cpd_periods[0]['value'];
+  $valid_values     = array_column( $cpd_periods, 'value' );
 
-  if( isset($_POST['cpd-from-date']) && !empty($_POST['cpd-from-date']) ){
-    $from_date = strtotime($_POST['cpd-from-date']);
+  $selected_period = ( isset( $_POST['cpd-period'] ) && ! empty( $_POST['cpd-period'] ) )
+      ? sanitize_text_field( $_POST['cpd-period'] )
+      : $default_period;
+
+  // Reject anything that didn't come from our list.
+  if ( ! in_array( $selected_period, $valid_values, true ) ) {
+      $selected_period = $default_period;
   }
-  if( isset($_POST['cpd-to-date']) && !empty($_POST['cpd-to-date']) ){
-    $to_date = strtotime($_POST['cpd-to-date']);
-  }
 
-  $query = new WP_Query( array(
-    'post_type' => 'cpd_record',
-    'author'    => get_current_user_id(),
-    'order'     => 'DESC',
-    'orderby'   => 'meta_value_num',
-    'meta_query' => array(
-      'relation' => 'AND',
-      array(
-        'key' => 'cpd-date',
-        'value' => $from_date,
-        'compare' => '>=',
-      ),
-      array(
-        'key' => 'cpd-date',
-        'value' => $to_date,
-        'compare' => '<=',
-      )
-    )
-  ));
-
-  $cpd_record_ids= array();
+  $period_parts = explode( '|', $selected_period );
+  $from_ts      = strtotime( $period_parts[0] );
+  $to_ts        = strtotime( $period_parts[1] . ' 23:59:59' );
 
   ?>
 
@@ -233,24 +238,14 @@ function cpd_records_content() {
       <div class="select-wrapper">
         <form method="post" class="membership-form">
           <div class="date-wrapper">
-              <label style=" position: absolute; top: -16px; font-size: 12px; ">Filter by date:</label>
-              <input class="date-filter" type="date" name="cpd-from-date"
-                value='<?php
-                  if( isset( $_POST['cpd-from-date'] )  && !empty( $_POST['cpd-from-date'] ) ){
-                    echo sanitize_text_field( $_POST['cpd-from-date'] );
-                  } else {
-                    echo ((int)date('Y')).'-01-01' ;
-                  }
-                ?>'>
-              <p style=" font-size: 18px; margin:unset!important"> - </p>
-              <input class="date-filter" type="date" name="cpd-to-date"
-              value='<?php
-                if( isset( $_POST['cpd-to-date'] )  && !empty( $_POST['cpd-to-date'] ) ){
-                  echo sanitize_text_field( $_POST['cpd-to-date'] );
-                } else {
-                  echo date('Y-m-d');
-                }
-              ?>'>
+              <label style=" position: absolute; top: -16px; font-size: 12px; ">Filter by period:</label>
+              <select name="cpd-period" class="date-filter">
+                <?php foreach ( $cpd_periods as $period ) : ?>
+                  <option value="<?php echo esc_attr( $period['value'] ); ?>" <?php selected( $selected_period, $period['value'] ); ?>>
+                    <?php echo esc_html( $period['label'] ); ?>
+                  </option>
+                <?php endforeach; ?>
+              </select>
             </div>
           <input type="hidden" name="filter" value='yes'>
           <button class="filter-button" type="submit">Submit</button>
@@ -288,6 +283,12 @@ function cpd_records_content() {
         } else {
             // Fallback to issue date if no rundown is available
             $course_last_date = $result->date_issued;
+        }
+
+        // Skip records outside the selected period.
+        $record_ts = strtotime( $course_last_date );
+        if ( $record_ts < $from_ts || $record_ts > $to_ts ) {
+            continue;
         }
         ?>
           <tr>

@@ -63,14 +63,16 @@ if (file_exists($image_path)) {
 
     .logo-wrapper{
       width: 100%;
+      max-width: 100%;
       <?php echo ($course->is_co_organized)? 'padding: 23px 0 17px 0;' : 'padding: 10px 0 30px 0;'  ;?>
     }
 
     .logo-wrapper img{
-      width: auto;
-      max-height: 135px;
+      height: auto;
+      max-height: 200px;
+      max-width: 35%;
       display: inline-block;
-      margin: 0 20px;
+      <?php echo ($course->is_co_organized)? 'margin: 40px 20px 10px 20px;' : 'margin: 0 20px 20px 20px;'  ;?>
       vertical-align: middle;
 
     }
@@ -142,7 +144,7 @@ if (file_exists($image_path)) {
 
     .signee-title{
       line-height: 18px!important;
-  font-size:14px;
+      font-size:14px;
     }
 
 
@@ -153,9 +155,9 @@ if (file_exists($image_path)) {
     <div class="e-cert-background">
       <div class="content-wrapper">
         <div class="logo-wrapper">
-          <img height="150px" width="150px"
+          <img
              src="<?php
-             $image_path = HKOTA_PLUGIN_DIR . '/asset/hkota_logo.png';
+             $image_path = HKOTA_PLUGIN_DIR . '/asset/hkota-logo-new.png';
              if (file_exists($image_path)) {
                  $image_data = file_get_contents($image_path);
                  $file_info = getimagesize($image_path);
@@ -174,7 +176,7 @@ if (file_exists($image_path)) {
                   $base64 = 'data:'.$mime_type.';base64,' . base64_encode($image_data);
               }
               ?>
-              <img height="150px" width="150px"
+              <img
                  src="<?php echo $base64 ?>" />
               <?php
             endif;

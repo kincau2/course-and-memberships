@@ -122,6 +122,169 @@ function delete_course_media(){
 
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// AJAX: on-the-fly file upload for all course file fields.
+//
+// Handles both single-slot fields (course_appendix, course_external_poster,
+// course_co_organizer_logo, course_cert_signature_1/2) and the multi-file
+// Learning Material field (course_learning_material).
+//
+// The JS sends: action, post_id, input_key, course_file (the file itself).
+// For single-slot fields the old file is deleted and the new one takes its
+// place.  For course_learning_material the new filename is appended to the
+// existing serialized array.
+//
+// Returns wp_send_json_success({filename, preview_url}) on success or
+// wp_send_json_error(message) on failure.
+// ────────────────────────────────────────────────────────────────────────────
+add_action( 'wp_ajax_upload_course_file', 'upload_course_file' );
+
+function upload_course_file() {
+
+	if ( ! current_user_can( 'edit_posts' ) ) {
+		wp_send_json_error( 'Permission denied.' );
+	}
+
+	$post_id   = isset( $_POST['post_id'] )   ? intval( $_POST['post_id'] )               : 0;
+	$input_key = isset( $_POST['input_key'] ) ? sanitize_key( wp_unslash( $_POST['input_key'] ) ) : '';
+
+	if ( ! $post_id || ! $input_key ) {
+		wp_send_json_error( 'Missing parameters.' );
+	}
+
+	if ( get_post_type( $post_id ) !== 'course' || ! current_user_can( 'edit_post', $post_id ) ) {
+		wp_send_json_error( 'Permission denied.' );
+	}
+
+	if ( empty( $_FILES['course_file'] ) || $_FILES['course_file']['error'] !== UPLOAD_ERR_OK ) {
+		$upload_error = isset( $_FILES['course_file']['error'] ) ? $_FILES['course_file']['error'] : -1;
+		wp_send_json_error( 'Upload error (code ' . $upload_error . ').' );
+	}
+
+	if ( ! is_uploaded_file( $_FILES['course_file']['tmp_name'] ) ) {
+		wp_send_json_error( 'Invalid upload.' );
+	}
+
+	$tmp_path      = $_FILES['course_file']['tmp_name'];
+	$original_name = $_FILES['course_file']['name'];
+	$file_size     = filesize( $tmp_path );
+
+	if ( $file_size === 0 ) {
+		wp_send_json_error( 'The uploaded file is empty.' );
+	}
+	if ( $file_size > 5242880 ) {
+		wp_send_json_error( 'File exceeds 5MB limit.' );
+	}
+
+	$finfo    = finfo_open( FILEINFO_MIME_TYPE );
+	$filetype = finfo_file( $finfo, $tmp_path );
+	finfo_close( $finfo );
+
+	// Allowed MIME types per field.
+	$all_types   = array( 'image/png' => 'png', 'image/jpeg' => 'jpg', 'application/pdf' => 'pdf' );
+	$image_types = array( 'image/png' => 'png', 'image/jpeg' => 'jpg' );
+	$pdf_types   = array( 'application/pdf' => 'pdf' );
+
+	switch ( $input_key ) {
+		case 'course_appendix':
+			$allowed = $pdf_types;
+			break;
+		case 'course_external_poster':
+			$allowed = $all_types;
+			break;
+		case 'course_co_organizer_logo':
+		case 'course_cert_signature_1':
+		case 'course_cert_signature_2':
+			$allowed = $image_types;
+			break;
+		case 'course_learning_material':
+			$allowed = $all_types;
+			break;
+		default:
+			$allowed = $image_types; // conservative default for any new image fields
+	}
+
+	if ( ! isset( $allowed[ $filetype ] ) ) {
+		$ext_list = implode( '/', array_values( $allowed ) );
+		wp_send_json_error( 'Invalid file type. Allowed: ' . $ext_list . '.' );
+	}
+
+	$upload_dir      = wp_upload_dir();
+	$course_file_dir = $upload_dir['basedir'] . '/course-files';
+	$filename        = wp_unique_filename( $course_file_dir, sanitize_file_name( $original_name ) );
+	$destination     = COURSE_FILE_DIR . $filename;
+
+	if ( ! move_uploaded_file( $tmp_path, $destination ) ) {
+		wp_send_json_error( 'Could not save the file. Please try again.' );
+	}
+
+	// ── Learning Material: append to serialized array ────────────────────
+	if ( $input_key === 'course_learning_material' ) {
+		$existing = get_post_meta( $post_id, 'course_learning_material', true );
+		if ( ! is_array( $existing ) ) {
+			$existing = array();
+		}
+		$existing[] = $filename;
+		update_post_meta( $post_id, 'course_learning_material', $existing );
+
+		$is_image   = in_array( $filetype, array( 'image/png', 'image/jpeg' ), true );
+		$preview_url = $is_image
+			? home_url( '/wp-content/uploads/course-files/' ) . $filename
+			: plugins_url( '/hkota-courses-and-memberships/asset/pdf-icon.png' );
+
+		wp_send_json_success( array(
+			'filename'    => $filename,
+			'preview_url' => $preview_url,
+			'file_url'    => home_url( '/wp-content/uploads/course-files/' ) . $filename,
+		) );
+	}
+
+	// ── Single-slot fields: delete old file, store new one ───────────────
+	$old_filename = get_post_meta( $post_id, $input_key, true );
+	if ( ! empty( $old_filename ) ) {
+		wp_delete_file( $course_file_dir . '/' . $old_filename );
+		if ( $input_key === 'course_external_poster' ) {
+			delete_post_meta( $post_id, 'course_snapshot' );
+		}
+	}
+
+	update_post_meta( $post_id, $input_key, $filename );
+
+	// For external poster: regenerate the snapshot postmeta.
+	if ( $input_key === 'course_external_poster' ) {
+		switch ( $filetype ) {
+			case 'image/png':
+			case 'image/jpeg':
+				update_post_meta( $post_id, 'course_snapshot', $filename );
+				break;
+			case 'application/pdf':
+				generate_poster_snapshot( COURSE_FILE_DIR . $filename, COURSE_FILE_DIR, $filename, $post_id );
+				break;
+		}
+	}
+
+	// Determine the preview URL for the response.
+	switch ( $input_key ) {
+		case 'course_external_poster':
+			$preview_url = in_array( $filetype, array( 'image/png', 'image/jpeg' ), true )
+				? home_url( '/wp-content/uploads/course-files/' ) . $filename
+				: plugins_url( '/hkota-courses-and-memberships/asset/pdf-icon.png' );
+			break;
+		case 'course_appendix':
+			$preview_url = plugins_url( '/hkota-courses-and-memberships/asset/pdf-icon.png' );
+			break;
+		default:
+			// signatures, co-organizer logo — always images
+			$preview_url = home_url( '/wp-content/uploads/course-files/' ) . $filename;
+	}
+
+	wp_send_json_success( array(
+		'filename'    => $filename,
+		'preview_url' => $preview_url,
+		'file_url'    => home_url( '/wp-content/uploads/course-files/' ) . $filename,
+	) );
+}
+
 add_action( 'wp_ajax_save_rundown', 'save_rundown' );
 
 function save_rundown(){
@@ -2441,9 +2604,12 @@ function fetch_user_cpd_data() {
 
 	$user_id = get_current_user_id();
 
-	// Resolve the requested period (defaults match the on-screen filter: from Jan 1 of current year to today).
-	$default_from = ( (int) date( 'Y' ) ) . '-01-01';
-	$default_to   = date( 'Y-m-d' );
+	// Default to the current CPD period (1 Jul – 30 Jun).
+	$_current_month      = (int) date( 'n' );
+	$_current_year       = (int) date( 'Y' );
+	$_period_start_year  = ( $_current_month >= 7 ) ? $_current_year : $_current_year - 1;
+	$default_from = $_period_start_year . '-07-01';
+	$default_to   = ( $_period_start_year + 1 ) . '-06-30';
 
 	$from_date = isset( $_POST['from_date'] ) && ! empty( $_POST['from_date'] )
 		? sanitize_text_field( $_POST['from_date'] )

@@ -43,6 +43,142 @@ jQuery(document).ready(function (e) {
 
   });
 
+  // ── AJAX file upload for course file fields ────────────────────────────
+  // Triggered as soon as the user selects a file (or multiple files for the
+  // learning-material input).  Each file is uploaded individually so the
+  // progress bar is meaningful and errors are per-file.
+  jQuery(document).on('change', 'input[data-upload-ajax="1"]', function () {
+
+    var $input   = jQuery(this);
+    var postId   = $input.data('post-id');
+    var inputKey = $input.data('input-key');
+    var files    = this.files;
+
+    if ( ! files || files.length === 0 ) {
+      return;
+    }
+
+    var $progressWrap = jQuery('#progress-' + inputKey);
+    var $bar          = $progressWrap.find('.upload-progress-bar');
+    var $label        = $progressWrap.find('.upload-progress-label');
+    var $previewWrap  = jQuery('#preview-' + inputKey);
+
+    // For single-slot fields, clear the existing preview optimistically.
+    if ( inputKey !== 'course_learning_material' ) {
+      $previewWrap.empty();
+    }
+
+    // Upload files sequentially so the progress bar tracks each one clearly.
+    var index = 0;
+
+    function uploadNext() {
+
+      if ( index >= files.length ) {
+        // All done – reset the input so the same file can be re-selected.
+        $input.val('');
+        $progressWrap.fadeOut(400, function () {
+          $bar.css('width', '0%');
+          $label.text('Uploading\u2026').removeClass('upload-error-label');
+        });
+        return;
+      }
+
+      var file = files[index];
+      index++;
+
+      $progressWrap.show();
+      $bar.css('width', '0%');
+      $label.text('Uploading "' + file.name + '" (' + index + ' / ' + files.length + ')\u2026')
+            .removeClass('upload-error-label');
+
+      var formData = new FormData();
+      formData.append('action',      'upload_course_file');
+      formData.append('post_id',     postId);
+      formData.append('input_key',   inputKey);
+      formData.append('course_file', file, file.name);
+
+      var xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', function (e) {
+        if ( e.lengthComputable ) {
+          var pct = Math.round((e.loaded / e.total) * 100);
+          $bar.css('width', pct + '%');
+        }
+      });
+
+      xhr.addEventListener('load', function () {
+        var response;
+        try {
+          response = JSON.parse(xhr.responseText);
+        } catch (e) {
+          $label.text('Server error — unexpected response.').addClass('upload-error-label');
+          $bar.css('width', '0%');
+          uploadNext();
+          return;
+        }
+
+        if ( response && response.success && response.data ) {
+
+          var data    = response.data;
+          var fileUrl = data.file_url;
+          var prevUrl = data.preview_url;
+          var fname   = data.filename;
+
+          var thumbWidth = (inputKey === 'course_co_organizer_logo' || inputKey.indexOf('signature') !== -1)
+            ? '100px'
+            : '50px';
+
+          var rowHtml =
+            '<div>' +
+              '<div class="course-file-preview">' +
+                '<a href="' + fileUrl + '" target="_blank">' +
+                  '<img src="' + prevUrl + '" width="' + thumbWidth + '">' +
+                '</a>' +
+                '<i data-post-id="' + postId + '"' +
+                   ' data-input-key="' + inputKey + '"' +
+                   ' data-filename="' + fname + '"' +
+                   ' class="fa-solid fa-circle-xmark"></i>' +
+              '</div>' +
+              '<span>' + fname + '</span>' +
+              '<br><br>' +
+            '</div>';
+
+          if ( inputKey === 'course_learning_material' ) {
+            // Append to the list.
+            $previewWrap.append(rowHtml);
+          } else {
+            // Replace the single preview.
+            $previewWrap.html(rowHtml);
+          }
+
+          $bar.css('width', '100%');
+          $label.text('Done.');
+
+        } else {
+
+          var errMsg = (response && response.data) ? response.data : 'Upload failed.';
+          $label.text(errMsg).addClass('upload-error-label');
+          $bar.css('width', '0%');
+
+        }
+
+        uploadNext();
+      });
+
+      xhr.addEventListener('error', function () {
+        $label.text('Network error — upload failed.').addClass('upload-error-label');
+        $bar.css('width', '0%');
+        uploadNext();
+      });
+
+      xhr.open('POST', hkota_backend_ajax.ajaxurl);
+      xhr.send(formData);
+    }
+
+    uploadNext();
+
+  });
+
   jQuery(document).on('click', '.pupil-file-preview i' , function(e) {
 
     e.preventDefault();
