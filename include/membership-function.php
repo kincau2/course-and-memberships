@@ -992,7 +992,7 @@ function fix_membership_search_for_custom_fields( $pieces, $wp_query ) {
     global $wpdb;
     
     // Only process user membership searches
-    if ( 'wc_user_membership' !== $wp_query->query['post_type'] || ! isset( $wp_query->query['s'] ) ) {
+    if ( ! isset( $wp_query->query['post_type'] ) || 'wc_user_membership' !== $wp_query->query['post_type'] || ! isset( $wp_query->query['s'] ) ) {
         return $pieces;
     }
     
