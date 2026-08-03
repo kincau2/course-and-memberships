@@ -140,14 +140,54 @@ function final_validation_before_payment($fields, $errors) {
       $course_id = $cart_item['course_id'];
       if( !empty($course_id) ){
         $course = new Course($course_id);
-        if( $course->get_enrollment_status() !== 'available' || !$course->get_user_eligibility( get_current_user_id() )['is_eligible'] ){
-          wc_add_notice(__('Sorry, ' . $course->title . ' is either not available
-          for register or you do not meet the enrollment requirment. We have removed this item from your cart.', 'woocommerce'), 'error');
+        $user_id = get_current_user_id();
+
+        // 1. Check for an existing enrollment/application on this course to prevent duplicate orders/payments.
+        // 'waiting_list' (and no record at all) are intentionally allowed through, since a waiting-list
+        // user should still be able to complete payment once the course becomes available.
+        $enrollment_status = $course->get_user_enrollment_status( $user_id );
+        $duplicate_message = '';
+
+        switch( $enrollment_status ){
+          case 'enrolled':
+            $duplicate_message = 'you have enrolled to this course already.';
+            break;
+          case 'awaiting_approval':
+          case 'pending':
+            $duplicate_message = 'you already submitted an application for this course, and the application status is pending.';
+            break;
+          case 'rejected':
+            $duplicate_message = 'you are not able to apply for this course.';
+            break;
+          case 'on_hold':
+            $duplicate_message = 'you already applied for this course, and the status is awaiting payment.';
+            break;
+        }
+
+        if( !empty($duplicate_message) ){
+          wc_add_notice(__('Sorry, ' . $duplicate_message . ' We have removed ' . $course->title . ' from your cart.', 'woocommerce'), 'error');
           WC()->cart->remove_cart_item( $cart_item_key );
+          continue;
+        }
+
+        // 2. Check the course is still open for enrollment (open window / capacity).
+        if( $course->get_enrollment_status() !== 'available' ){
+          wc_add_notice(__('Sorry, ' . $course->title . ' is not available for register. We have removed this item from your cart.', 'woocommerce'), 'error');
+          WC()->cart->remove_cart_item( $cart_item_key );
+          continue;
+        }
+
+        // 3. Check user eligibility (membership, min years, uploads requirement).
+        $eligibility = $course->get_user_eligibility( $user_id );
+        if( !$eligibility['is_eligible'] ){
+          wc_add_notice(__('Sorry, ' . $course->title . ': ' . $eligibility['message'] . ' We have removed this item from your cart.', 'woocommerce'), 'error');
+          WC()->cart->remove_cart_item( $cart_item_key );
+          continue;
         }
       } else{
         wc_add_notice(__('Sorry, ' . 'unexpected error occurred.', 'woocommerce'), 'error');
         WC()->cart->remove_cart_item( $cart_item_key );
+        continue;
       }
     }
 
