@@ -2061,7 +2061,7 @@ function import_pupil_data() {
 
 		} else {
 
-			if( !empty( strtolower( trim( $row[1] ) ) ) ){
+			if( strtolower( trim( $row[1] ) ) === 'yes' ){
 				wp_send_json_error(['message' => 'User not exist for email: ' . $email . ' but claimed to be HKOTA member.']);
 			}
 

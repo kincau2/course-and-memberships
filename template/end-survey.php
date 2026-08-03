@@ -82,7 +82,7 @@ text-align: left;
     <!-- First Part: Sign In/Out Form -->
     <form method="post">
         <div id="part-one">
-        <h2>Sign out section & End ccourse survey </h2>
+        <h2>Sign out section & End course survey </h2>
         <label for="registration_email">Registration Email:</label><br>
         <input type="email" id="registration_email" name="registration_email" required><br>
         <input type="hidden" name="section_id" value="<?php echo esc_attr($section['id']); ?>">

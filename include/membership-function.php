@@ -84,6 +84,7 @@ function set_default_membership_status_to_pause($order_id, $old_status, $new_sta
         send_renew_membership_email($user_id);
       }
       // Generate membership number. Format: pwm-672-20-23
+      // Special case for LIFE membership : pwm-672~L-20-23
       $surname = strtolower( get_user_meta($user_id,'member_last_name_eng',true) );
       $firstname = strtolower( get_user_meta($user_id,'member_first_name_eng',true) );
       // Split the string into words.
@@ -95,7 +96,12 @@ function set_default_membership_status_to_pause($order_id, $old_status, $new_sta
       $hkid = substr( get_user_meta($user_id,'member_hkid',true) , -3);
       $membership_start_date = date('y' , strtotime( $membership_start_date ) );
       $membership_end_date = date('y' , strtotime( $membership_end_date ) );
-      $membership_number = $initials.'-'.$hkid.'~'.$membership_start_date.'-'.$membership_end_date;
+      if( $membership_plan_id == 961 ){
+        // LIFE membership, HARDCODED PLAN ID, need to change if plan ID changed
+        $membership_number = $initials.'-'.$hkid.'~L-'.$membership_start_date.'-'.$membership_end_date;
+      } else{
+        $membership_number = $initials.'-'.$hkid.'~'.$membership_start_date.'-'.$membership_end_date;
+      }
       update_user_meta($user_id, 'member_number',$membership_number);
     }
   }
