@@ -102,6 +102,10 @@ $membership_number = $args['membership_number'];
           $prefix = substr( $membership_number, 0 , $pos + 1 );
           $suffix = substr( $membership_number, $pos + 1 );
           $valid = explode("-",$suffix);
+          if( $valid[0] == 'L'){
+            $valid[0] = $valid[1];
+            $valid[1] = $valid[2];
+          }
         ?>
         <div class="membership-number">
           <div ><span >Membership Number: </span><?php echo $prefix.$suffix ;?> </div>

@@ -49,8 +49,13 @@ if ( file_exists( $_chinese_font_path ) ) {
 
           @page{
             /* size: 21cm 29.7cm; */
-            margin: 0;
-            padding: :0;
+            /* Bottom margin is larger than the others to leave clearance for
+               the "Page X of Y" footer added later (via TCPDF, at 15mm from
+               the bottom edge). @page margin applies on every page, unlike
+               the html element's margin below which only affects the very
+               first/last page of the flowed document. */
+            margin: 1cm 1cm 1.8cm 1cm;
+            padding: 0;
           }
           body{
             font-family: "Noto Sans TC", 'NotoSansTC', "DM Serif Display", serif;
@@ -62,9 +67,6 @@ if ( file_exists( $_chinese_font_path ) ) {
             font-family: "Noto Sans TC", 'NotoSansTC', serif!important;
             font-style: normal;
             vertical-align: top;
-          }
-          html{
-            margin: 1cm;
           }
           .page-wrapper{
             width: : 678px;
@@ -129,6 +131,18 @@ if ( file_exists( $_chinese_font_path ) ) {
           }
           .info-wrapper{
             page-break-inside: avoid !important;
+          }
+          /* The rundown section can legitimately be taller than a single
+             page, so it must NOT use "avoid" on the whole wrapper (dompdf
+             cannot keep an over-height block together and instead defers it
+             to the next page while leaving the current page blank). Row-level
+             avoidance below keeps individual rows intact while still letting
+             the table flow naturally across pages. */
+          .rundown-wrapper{
+            page-break-inside: auto !important;
+          }
+          table.rundown tr{
+            page-break-inside: avoid;
           }
           .info-wrapper span,.info-wrapper p{
             line-height: 18px!important;
@@ -404,7 +418,7 @@ if ( file_exists( $_chinese_font_path ) ) {
             <p class="info-data"><?php echo $course->remarks ;?> </p>
           </div>
           <div class="spacer"></div>
-          <div class="info-wrapper">
+          <div class="rundown-wrapper">
             <span class="info-type-small purple">Programme Rundown: </span><br>
             <div class="spacer"></div>
             <?php echo $course->generateRundownTable() ;?>

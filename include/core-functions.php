@@ -1463,7 +1463,7 @@ function generate_poster_snapshot($pdf_file_path, $output_directory, $filename, 
         escapeshellarg($pdf_file_path)
     );
     
-    $gs_output = shell_exec($gs_command);
+    // $gs_output = shell_exec($gs_command);
     
     // Check if PNG was created successfully
     if (file_exists($temp_png) && filesize($temp_png) > 0) {
@@ -1525,7 +1525,7 @@ function generate_poster_snapshot($pdf_file_path, $output_directory, $filename, 
             return true;
         }
     } else {
-        error_log('generate_poster_snapshot: Ghostscript failed to create PNG - ' . ($gs_output ? $gs_output : 'no output'));
+        error_log('generate_poster_snapshot: Ghostscript failed to create PNG.');
     }
     
     // Method 2: Try Imagick directly (may fail with png16malpha error)
