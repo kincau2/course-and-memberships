@@ -1626,7 +1626,7 @@ class Course {
     foreach ($results as $result) {
         $user = get_user_by('ID',$result->user_id);
         // Send the email
-        $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+        $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
         if ( ! $sent ) {
           // Handle email not sent, you could log the error here
@@ -1654,7 +1654,7 @@ class Course {
     // Get the content from the buffer and clean the buffer
     $html_content = ob_get_clean();
 
-    $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+    $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
@@ -1684,7 +1684,7 @@ class Course {
     // Get the content from the buffer and clean the buffer
     $html_content = ob_get_clean();
 
-    $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+    $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
@@ -1713,7 +1713,7 @@ class Course {
     // Get the content from the buffer and clean the buffer
     $html_content = ob_get_clean();
 
-    $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+    $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
@@ -1742,7 +1742,7 @@ class Course {
     // Get the content from the buffer and clean the buffer
     $html_content = ob_get_clean();
 
-    $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+    $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
@@ -1771,7 +1771,7 @@ class Course {
     // Get the content from the buffer and clean the buffer
     $html_content = ob_get_clean();
 
-    $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+    $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
@@ -1800,7 +1800,7 @@ class Course {
 
 
     // Send the email
-    $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+    $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
@@ -1830,7 +1830,7 @@ class Course {
 
 
     // Send the email
-    $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+    $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here
@@ -1860,7 +1860,7 @@ class Course {
 
 
     // Send the email
-    $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+    $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
 
     if ( ! $sent ) {
@@ -1899,7 +1899,7 @@ class Course {
     $html_content = ob_get_clean();
     
     // Send the email
-    $sent = wp_mail($user->user_email, $subject, $html_content, $headers);
+    $sent = wp_mail($user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers);
 
     if ( ! $sent ) {
         // Handle email not sent, you could log the error here

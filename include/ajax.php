@@ -1839,7 +1839,7 @@ function import_user_membership_ajax() {
 
 		  $html_content = ob_get_clean();
 
-		  $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+		  $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
 		  if ( ! $sent ) {
 		      // Handle email not sent, you could log the error here
@@ -2119,7 +2119,7 @@ function import_pupil_data() {
 
 			$html_content = ob_get_clean();
 
-			$sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+			$sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
 			if( $course->get_user_enrollment_id($user_id) ){
 				wp_send_json_error(['message' => $email . ' already registered in this course']);
@@ -2464,7 +2464,7 @@ function admin_import_pupil_data() {
 
 			$html_content = ob_get_clean();
 
-			$sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+			$sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
 			if( $course->get_user_enrollment_id($user_id) ){
 				wp_send_json_error(['message' => $email . ' already registered in this course']);

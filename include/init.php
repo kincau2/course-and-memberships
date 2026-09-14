@@ -8,6 +8,7 @@ include dirname(__FILE__) . '/ajax.php' ;
 include dirname(__FILE__) . '/enrollment-function.php' ;  
 include dirname(__FILE__) . '/membership-function.php' ;
 include dirname(__FILE__) . '/core-functions.php' ;
+include dirname(__FILE__) . '/email-functions.php' ;
 include dirname(__FILE__) . '/my-account.php' ;
 include dirname(__FILE__) . '/user-registration.php' ;
 include dirname(__FILE__) . '/capability.php' ;

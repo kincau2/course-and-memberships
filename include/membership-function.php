@@ -179,7 +179,7 @@ function send_paused_membership_email($user_id) {
   // Get the content from the buffer and clean the buffer
   $html_content = ob_get_clean();
 
-  $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+  $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
   if ( ! $sent ) {
       // Handle email not sent, you could log the error here
@@ -206,7 +206,7 @@ function send_active_membership_email($user_id) {
   // Get the content from the buffer and clean the buffer
   $html_content = ob_get_clean();
 
-  $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+  $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
   if ( ! $sent ) {
       // Handle email not sent, you could log the error here
@@ -233,7 +233,7 @@ function send_renew_membership_email($user_id) {
   // Get the content from the buffer and clean the buffer
   $html_content = ob_get_clean();
 
-  $sent = wp_mail( $user->user_email, $subject, $html_content, $headers );
+  $sent = wp_mail( $user->user_email, $subject, hkota_inline_email_html( $html_content ), $headers );
 
   if ( ! $sent ) {
       // Handle email not sent, you could log the error here
