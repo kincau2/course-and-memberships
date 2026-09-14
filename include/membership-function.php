@@ -20,7 +20,7 @@ function change_enrollment_status_when_member_active( $user_membership, $old_sta
       $enrollments = get_user_enrollments($user_id,$args);
       foreach ( $enrollments as $enrollment ) {
         $course = new Course($enrollment->course_id);
-        if( $course->is_uploads_required ){
+        if( $course->is_restricted && $course->is_uploads_required ){
           $enrollment->set('status','awaiting_approval');
           $course->trigger_awaiting_approval_email($user_id);
         } else{

@@ -325,7 +325,7 @@ if ( file_exists( $_chinese_font_path ) ) {
                     <td class="text-center"><?php echo "HKD " . $course->fee_member_earlybird ;?></td>
                     <td class="text-center"><?php echo "HKD " . $course->fee_member ;?></td>
                   </tr>
-                  <?php if( !$course->is_member_only ): ?>
+                  <?php if( !( $course->is_restricted && $course->is_member_only ) ): ?>
                     <tr>
                       <td >Non-HKOTA members</td>
                       <td class="text-center"><?php echo "HKD " . $course->fee_non_member_earlybird ;?></td>
@@ -348,7 +348,7 @@ if ( file_exists( $_chinese_font_path ) ) {
                     <td style="width:50%">HKOTA members</td>
                     <td style="width:50%" class="text-center"><?php echo "HKD " . $course->fee_member ;?></td>
                   </tr>
-                  <?php if( !$course->is_member_only ): ?>
+                  <?php if( !( $course->is_restricted && $course->is_member_only ) ): ?>
                     <tr>
                       <td>Non-HKOTA members</td>
                       <td class="text-center"><?php echo "HKD " . $course->fee_non_member ;?></td>

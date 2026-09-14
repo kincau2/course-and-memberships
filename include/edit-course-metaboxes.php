@@ -214,7 +214,7 @@ function save_course_meta( $post_id, $post ) {
 
   $course = new Course($post->ID);
 
-  if( isset($course_meta['course_is_uploads_required']) && empty($course_meta['course_cert_requirment']) ){
+  if( !empty($course_meta['course_is_restricted']) && isset($course_meta['course_is_uploads_required']) && empty($course_meta['course_cert_requirment']) ){
     $admin_notice[] = array(
       'type' => 'error',
       'message' => 'Error: Please at least input one required certificate.');

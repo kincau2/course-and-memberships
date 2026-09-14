@@ -334,7 +334,7 @@ function order_completed_register_pupil_to_course($order_id, $old_status, $new_s
       $user_id = $order->get_customer_id();
       if(empty($course_id)) continue;
       $course = new Course($course_id);
-      if ( function_exists( 'wc_memberships_get_user_memberships' ) && $course->is_member_only ){
+      if ( $course->is_restricted && function_exists( 'wc_memberships_get_user_memberships' ) && $course->is_member_only ){
         $memberships = wc_memberships_get_user_memberships($user_id);
         foreach ($memberships as $membership ) {
           // can be: wcm-active, wcm-cancelled, wcm-complimentary, wcm-delayed, wcm-expired, wcm-paused, wcm-pending
@@ -352,7 +352,7 @@ function order_completed_register_pupil_to_course($order_id, $old_status, $new_s
       } else {
         $status = 'enrolled';
       }
-      if( $course->is_uploads_required && $status == 'enrolled' ){
+      if( $course->is_restricted && $course->is_uploads_required && $status == 'enrolled' ){
         $status = 'awaiting_approval';
       }
 
