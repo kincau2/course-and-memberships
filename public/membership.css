@@ -148,6 +148,13 @@ a{
     justify-content: flex-end;
 }
 
+.course-wrapper img.pdf-snapshot {
+    height: 100%;
+    width: auto;
+    object-fit: cover;
+    object-position: top;
+}
+
 .popup-message {
      position: fixed;
      top: 50px;
