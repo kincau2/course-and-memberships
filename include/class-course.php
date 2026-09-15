@@ -1403,8 +1403,11 @@ class Course {
         $dompdf->render();
         $pdf_output = $dompdf->output();
 
-        // Generate a unique filename for the certificate
-        $filename = sanitize_title($this->title) . '-' . time() . '.pdf';
+        // Generate a unique filename for the certificate. A random token is added
+        // alongside the timestamp so concurrent requests (e.g. two certificates
+        // generated within the same second) cannot land on the same filename and
+        // silently overwrite each other's PDF on disk.
+        $filename = sanitize_title($this->title) . '-' . time() . '-' . wp_generate_password(8, false, false) . '.pdf';
         $filename = wp_unique_filename(COURSE_CERTIFICATE_DIR, $filename);
 
         // Save the certificate PDF to the server

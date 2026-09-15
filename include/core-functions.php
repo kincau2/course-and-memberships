@@ -13,12 +13,16 @@ use Endroid\QrCode\Writer\PngWriter;
 use transloadit\Transloadit;
 
 
-
-// Shortcode to display the CSV upload form
 add_shortcode('debug', 'display_debug_message');
 
 function display_debug_message(){
-    echo "Debug mode is on.";
+    $debug_message = get_transient('debug_message');
+    echo "Debug mode is on. ";
+    if ( $debug_message ) {
+        echo "<pre>";
+        echo print_r($debug_message, true);
+        echo "</pre>";
+    }
 }
 
 add_shortcode('login-button-message', 'login_button_message');
@@ -2142,7 +2146,7 @@ function protect_certificate_access() {
       "SELECT * FROM $table_name WHERE file = %s",
       $file_name
   ));
-
+  set_transient('debug_message', $cpd_record, 60);
   // Check if the CPD record exists and if the current user is the owner
   if ( $cpd_record && ( $cpd_record->user_id == $current_user_id || current_user_can('administrator' ) ) ) {
       // The user is authorized to view the certificate, proceed normally
@@ -2159,27 +2163,27 @@ function protect_certificate_access() {
         
         readfile($file_path);
         exit; // Critical: Stop execution to prevent additional output
-    } else {
-      ?>
-        <div class="error-overlay" id="errorOverlay">
-          <div class="error-box" id="errorBox">
-              <h2>File not found..</h2>
-          </div>
-        </div>
-      <?php
-        echo "<div class='error-box'> <a href='" . home_url() . "'>Return to Home</a></div>";
-    }
+        } else {
+        ?>
+            <div class="error-overlay" id="errorOverlay">
+            <div class="error-box" id="errorBox">
+                <h2>File not found..</h2>
+            </div>
+            </div>
+        <?php
+            echo "<div class='error-box'> <a href='" . home_url() . "'>Return to Home</a></div>";
+        }
 
-  } else {
-    ?>
-    <div class="error-overlay" id="errorOverlay">
-      <div class="error-box" id="errorBox">
-          <h2>You are not authorized to access this certificate.</h2>
-      </div>
-    </div>
-    <?php
-      exit;
-  }
+    } else {
+        ?>
+        <div class="error-overlay" id="errorOverlay">
+        <div class="error-box" id="errorBox">
+            <h2>You are not authorized to access this certificate.</h2>
+        </div>
+        </div>
+        <?php
+        exit;
+    }
   ?>
   <style>
     /* Full-screen overlay to dim the background */
