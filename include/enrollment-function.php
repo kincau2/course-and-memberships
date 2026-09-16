@@ -363,7 +363,6 @@ function order_completed_register_pupil_to_course($order_id, $old_status, $new_s
         if( $enrollment->status == 'waiting_list' || $enrollment->status == 'on_hold' ){
           $course->set_attendance_record($user_id);
           $enrollment->set('amount',$item->get_total());
-          set_transient('debug', 'fired, status: '.$status, 30);
           $enrollment->set('status',$status);
           $enrollment->set('order_id',$order_id);
           $enrollment->set('payment_method',$order->get_payment_method_title());

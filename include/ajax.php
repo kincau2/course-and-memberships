@@ -3083,7 +3083,6 @@ function search_users_for_course_enrollment() {
             'full_name' => trim($first_name . ' ' . $last_name) ?: $user->display_name
         ];
     }
-    set_transient('debug', $suggestions, 30);
     wp_send_json_success($suggestions);
 }
 
