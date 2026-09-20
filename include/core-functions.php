@@ -15,15 +15,91 @@ use transloadit\Transloadit;
 
 // add_shortcode('debug', 'display_debug_message');
 
-// function display_debug_message(){
-//     $debug_message = get_transient('debug_message');
-//     echo "Debug mode is on. ";
-//     if ( $debug_message ) {
-//         echo "<pre>";
-//         echo print_r($debug_message, true);
-//         echo "</pre>";
-//     }
-// }
+function display_debug_message(){
+
+    // $debug_message = get_transient('debug_message');
+    echo "Debug mode is on. ";
+    if ( $debug_message ) {
+        echo "<pre>";
+        echo print_r($debug_message, true);
+        echo "</pre>";
+    }
+
+    // --- TEMP DEBUG: investigate abnormally expired user memberships ---
+    // A user's member_number is formatted like "sc-123~20-23" (or "sc-123~L-20-23"
+    // for LIFE membership), where the trailing two digits are the 2-digit year the
+    // membership is meant to end. If that meta says the membership should still run
+    // through 2027 or later, but the membership post is already "wcm-expired", we
+    // want to know about it — unless the user already has a matching ACTIVE
+    // membership covering that same end year (which would mean it was legitimately
+    // superseded/renewed).
+    global $wpdb;
+
+    $expired_memberships = $wpdb->get_results(
+        "SELECT ID, post_author FROM {$wpdb->posts}
+         WHERE post_type = 'wc_user_membership'
+           AND post_status = 'wcm-expired'"
+    );
+
+    $flagged_users = array();
+
+    foreach ( $expired_memberships as $expired ) {
+        $user_id = (int) $expired->post_author;
+
+        $member_number = get_user_meta( $user_id, 'member_number', true );
+        if ( empty( $member_number ) ) {
+            continue;
+        }
+
+        // Extract the trailing 2-digit end year from the member_number.
+        if ( ! preg_match( '/(\d{2})$/', $member_number, $matches ) ) {
+            continue; // Could not parse an end year, skip.
+        }
+        $end_year_2digit = (int) $matches[1];
+
+        // Only care about memberships whose member_number says they end 2027+.
+        if ( $end_year_2digit < 27 ) {
+            continue;
+        }
+
+        $expected_end_year = 2000 + $end_year_2digit;
+
+        // Does this user have an ACTIVE membership whose _end_date year matches?
+        $active_memberships = $wpdb->get_results( $wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts}
+             WHERE post_type = 'wc_user_membership'
+               AND post_author = %d
+               AND post_status = 'wcm-active'",
+            $user_id
+        ) );
+
+        $has_matching_active = false;
+        foreach ( $active_memberships as $active ) {
+            $active_end_date = get_post_meta( $active->ID, '_end_date', true );
+            if ( $active_end_date && (int) date( 'Y', strtotime( $active_end_date ) ) === $expected_end_year ) {
+                $has_matching_active = true;
+                break;
+            }
+        }
+
+        if ( ! $has_matching_active ) {
+            $flagged_users[] = array(
+                'user_id'                 => $user_id,
+                'expired_membership_id'   => (int) $expired->ID,
+                'member_number'           => $member_number,
+                'expected_end_year'       => $expected_end_year,
+                'active_membership_count' => count( $active_memberships ),
+            );
+        }
+    }
+
+    echo "<pre>";
+    echo "Checked " . count( $expired_memberships ) . " expired membership(s).\n";
+    echo "Flagged users (member_number implies still active, but no matching active membership found):\n";
+    print_r( $flagged_users );
+    echo "</pre>";
+    // --- END TEMP DEBUG ---
+}
 
 add_shortcode('login-button-message', 'login_button_message');
 

@@ -62,7 +62,13 @@ function set_default_membership_status_to_pause($order_id, $old_status, $new_sta
         $user_membership = wc_memberships_create_user_membership( $args,'create');
 
         if($user_membership){
-          update_post_meta($user_membership->id,'_end_date', $membership_end_date );
+          // Use set_end_date() rather than a raw update_post_meta() call so that
+          // WooCommerce Memberships also reschedules its Action Scheduler expiry
+          // event to match the purchased term. Without this, the membership keeps
+          // whatever default expiry the plan's own access length scheduled (e.g.
+          // 1 year), and will auto-expire early regardless of the correct end date
+          // stored here.
+          $user_membership->set_end_date( $membership_end_date );
           set_membership_status( $user_id ,$user_membership->id,"wcm-paused");
           expire_user_other_membership($user_id,$user_membership->id);
           send_paused_membership_email($user_id);
@@ -78,7 +84,9 @@ function set_default_membership_status_to_pause($order_id, $old_status, $new_sta
 
         $user_membership = wc_memberships_create_user_membership( $args,'renew');
 
-        update_post_meta($user_membership->id,'_end_date', $membership_end_date );
+        // Same reasoning as above: set_end_date() keeps the scheduled expiry
+        // event in sync with the actual purchased end date.
+        $user_membership->set_end_date( $membership_end_date );
         set_membership_status( $user_id ,$user_membership->id,"wcm-active");
         expire_user_other_membership($user_id,$user_membership->id);
         send_renew_membership_email($user_id);
@@ -118,8 +126,11 @@ function expire_user_other_membership($user_id,$new_user_membership_id){
           $user_membership->status == 'wcm-delay' ||
           $user_membership->status == 'wcm-paused'
         ){
-        update_post_meta( $user_membership->id, '_end_date' , date('Y-m-d') );
-        set_membership_status( $user_id ,$user_membership->id,"wcm-expired");
+        // expire_membership() is WooCommerce Memberships' own method: it sets the
+        // status, stamps the end date to now, and (re)schedules the post-expiration
+        // events consistently. Using it instead of a raw update_post_meta() +
+        // set_membership_status() pair keeps everything in sync.
+        $user_membership->expire_membership();
       }
     }
   }
@@ -128,7 +139,6 @@ function expire_user_other_membership($user_id,$new_user_membership_id){
 
 // Set status of a user's membership plan
 function set_membership_status($user_id, $user_membership_id, $status) {
-    global $wpdb;
 
     // Allowed statuses for membership
     $allowed_statuses = [
@@ -146,17 +156,19 @@ function set_membership_status($user_id, $user_membership_id, $status) {
         return new WP_Error('invalid_status', 'Invalid membership status.');
     }
 
-    // Update the membership status (post_status)
-    $updated = $wpdb->update(
-        $wpdb->posts,
-        ['post_status' => $status], // Set the new status
-        ['ID' => $user_membership_id] // Where the post ID matches
-    );
+    // Load the User Membership object and use its own update_status() method
+    // instead of a raw $wpdb->update() on post_status. A raw SQL write bypasses
+    // WordPress' transition_post_status hook entirely, which means WooCommerce
+    // Memberships never logs the status-change activity note, never fires
+    // wc_memberships_user_membership_status_changed (used elsewhere in this
+    // plugin), and never switches the member's user role to match the new status.
+    $user_membership = wc_memberships_get_user_membership( $user_membership_id );
 
-    // Check if the update was successful
-    if ($updated === false) {
-        return new WP_Error('update_failed', 'Failed to update membership status.');
+    if ( ! $user_membership ) {
+        return new WP_Error('membership_not_found', 'User membership not found.');
     }
+
+    $user_membership->update_status( $status );
 
     return true; // Successfully updated
 }
@@ -956,6 +968,7 @@ function add_custom_member_columns( $columns ) {
             $new_columns['title'] = __( 'Username', 'textdomain' );
             $new_columns['member_first_name'] = __( 'First Name', 'textdomain' );
             $new_columns['member_mobile'] = __( 'Mobile', 'textdomain' );
+            $new_columns['member_number'] = __( 'Member No.', 'textdomain' );
             continue;
         }
         $new_columns[$key] = $value;
@@ -987,6 +1000,12 @@ function populate_custom_member_columns( $column, $post_id ) {
         case 'member_user_id':
             if ( $user ) {
                 echo esc_html( $user->ID );
+            }
+            break;
+        case 'member_number':
+            if ( $user ) {
+                $member_number = get_user_meta( $user->ID, 'member_number', true );
+                echo $member_number ? esc_html( $member_number ) : '&mdash;';
             }
             break;
     }
