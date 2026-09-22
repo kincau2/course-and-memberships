@@ -15,91 +15,803 @@ use transloadit\Transloadit;
 
 // add_shortcode('debug', 'display_debug_message');
 
-function display_debug_message(){
+// function display_debug_message(){
 
-    // $debug_message = get_transient('debug_message');
-    echo "Debug mode is on. ";
-    if ( $debug_message ) {
-        echo "<pre>";
-        echo print_r($debug_message, true);
-        echo "</pre>";
-    }
+//     // $debug_message = get_transient('debug_message');
+//     echo "Debug mode is on. ";
+//     if ( $debug_message ) {
+//         echo "<pre>";
+//         echo print_r($debug_message, true);
+//         echo "</pre>";
+//     }
+// }
 
-    // --- TEMP DEBUG: investigate abnormally expired user memberships ---
-    // A user's member_number is formatted like "sc-123~20-23" (or "sc-123~L-20-23"
-    // for LIFE membership), where the trailing two digits are the 2-digit year the
-    // membership is meant to end. If that meta says the membership should still run
-    // through 2027 or later, but the membership post is already "wcm-expired", we
-    // want to know about it — unless the user already has a matching ACTIVE
-    // membership covering that same end year (which would mean it was legitimately
-    // superseded/renewed).
-    global $wpdb;
+// --- TEMP DEBUG (Problem B, Stage 1): audit membership expiry scheduling ---
+// Any page/post containing the [debug] shortcode will, for an administrator,
+// trigger a CSV download of the membership expiry audit instead of rendering
+// the page. This runs on template_redirect (before any theme output is sent)
+// so headers can be safely overridden for the file download.
 
-    $expired_memberships = $wpdb->get_results(
-        "SELECT ID, post_author FROM {$wpdb->posts}
-         WHERE post_type = 'wc_user_membership'
-           AND post_status = 'wcm-expired'"
-    );
+// add_action( 'template_redirect', 'maybe_export_membership_expiry_audit_csv' );
+// function maybe_export_membership_expiry_audit_csv() {
 
-    $flagged_users = array();
+//     if ( ! is_singular() ) {
+//         return;
+//     }
 
-    foreach ( $expired_memberships as $expired ) {
-        $user_id = (int) $expired->post_author;
+//     global $post;
 
-        $member_number = get_user_meta( $user_id, 'member_number', true );
-        if ( empty( $member_number ) ) {
-            continue;
-        }
+//     if ( ! $post instanceof WP_Post || ! has_shortcode( $post->post_content, 'debug' ) ) {
+//         return;
+//     }
 
-        // Extract the trailing 2-digit end year from the member_number.
-        if ( ! preg_match( '/(\d{2})$/', $member_number, $matches ) ) {
-            continue; // Could not parse an end year, skip.
-        }
-        $end_year_2digit = (int) $matches[1];
+//     if ( ! current_user_can( 'administrator' ) ) {
+//         wp_die( 'Unauthorized' );
+//     }
 
-        // Only care about memberships whose member_number says they end 2027+.
-        if ( $end_year_2digit < 27 ) {
-            continue;
-        }
+//     $rows = get_membership_expiry_audit_rows();
 
-        $expected_end_year = 2000 + $end_year_2digit;
+//     nocache_headers();
+//     header( 'Content-Type: text/csv; charset=utf-8' );
+//     header( 'Content-Disposition: attachment; filename="membership-expiry-audit-' . date( 'Ymd-His' ) . '.csv"' );
 
-        // Does this user have an ACTIVE membership whose _end_date year matches?
-        $active_memberships = $wpdb->get_results( $wpdb->prepare(
-            "SELECT ID FROM {$wpdb->posts}
-             WHERE post_type = 'wc_user_membership'
-               AND post_author = %d
-               AND post_status = 'wcm-active'",
-            $user_id
-        ) );
+//     $output = fopen( 'php://output', 'w' );
 
-        $has_matching_active = false;
-        foreach ( $active_memberships as $active ) {
-            $active_end_date = get_post_meta( $active->ID, '_end_date', true );
-            if ( $active_end_date && (int) date( 'Y', strtotime( $active_end_date ) ) === $expected_end_year ) {
-                $has_matching_active = true;
-                break;
-            }
-        }
+//     fputcsv( $output, array(
+//         'membership_id',
+//         'user_id',
+//         'user_email',
+//         'plan_id',
+//         'plan_name',
+//         'status',
+//         'stored_end_date',
+//         'matched_order_id',
+//         'matched_order_status',
+//         'application_type',
+//         'start_year',
+//         'years',
+//         'computed_true_start_date',
+//         'computed_true_end_date',
+//         'member_number',
+//         'scheduled_action_id',
+//         'scheduled_action_status',
+//         'scheduled_expiry_date_gmt',
+//         'actual_expired_date',
+//         'actual_expired_by',
+//         'category',
+//         'notes',
+//     ) );
 
-        if ( ! $has_matching_active ) {
-            $flagged_users[] = array(
-                'user_id'                 => $user_id,
-                'expired_membership_id'   => (int) $expired->ID,
-                'member_number'           => $member_number,
-                'expected_end_year'       => $expected_end_year,
-                'active_membership_count' => count( $active_memberships ),
-            );
-        }
-    }
+//     foreach ( $rows as $row ) {
+//         fputcsv( $output, $row );
+//     }
 
-    echo "<pre>";
-    echo "Checked " . count( $expired_memberships ) . " expired membership(s).\n";
-    echo "Flagged users (member_number implies still active, but no matching active membership found):\n";
-    print_r( $flagged_users );
-    echo "</pre>";
-    // --- END TEMP DEBUG ---
-}
+//     fclose( $output );
+//     exit;
+// }
+
+// Builds one audit row per relevant user membership, reconciling:
+// - the end date actually stored on the membership (_end_date)
+// - the end date implied by the order that created/renewed it (years + start_year)
+// - the pending Action Scheduler expiry task (wc_memberships_user_membership_expiry)
+// - for already-expired memberships, when they actually flipped to "expired"
+// so that memberships still ticking toward a wrong (premature) expiry date, and
+// memberships that were already wrongly auto-expired, can both be identified.
+// Returns an array of associative rows (not CSV-ordered) so this data can be
+// reused both by the CSV export and by the [membership_fix] remediation.
+
+// function get_membership_expiry_audit_data() {
+//     global $wpdb;
+
+//     $memberships = $wpdb->get_results(
+//         "SELECT ID, post_author, post_parent, post_status, post_date_gmt
+//          FROM {$wpdb->posts}
+//          WHERE post_type = 'wc_user_membership'
+//            AND post_status IN ('wcm-active','wcm-paused','wcm-delayed','wcm-expired')"
+//     );
+
+//     // Preload EVERY membership post per user (any status, not just the ones
+//     // queried above) so we can tell whether an expired membership is the
+//     // user's latest membership record, or whether it was superseded by a
+//     // later one (see the "superseded" check further down), and whether the
+//     // user currently holds any active/paused/delayed membership at all.
+//     $all_membership_posts = $wpdb->get_results(
+//         "SELECT ID, post_author, post_date_gmt, post_status
+//          FROM {$wpdb->posts}
+//          WHERE post_type = 'wc_user_membership'"
+//     );
+//     $membership_posts_by_user = array();
+//     foreach ( $all_membership_posts as $mp ) {
+//         $membership_posts_by_user[ (int) $mp->post_author ][] = $mp;
+//     }
+
+//     // Preload every order item that granted a membership, pivoting its meta
+//     // (years, start_year, application_type, user_membership_id) into columns
+//     // in a single query, rather than querying per-membership.
+//     $item_rows = $wpdb->get_results(
+//         "SELECT oi.order_item_id, oi.order_id,
+//             MAX(CASE WHEN oim.meta_key = 'membership_plan_id' THEN oim.meta_value END) AS membership_plan_id,
+//             MAX(CASE WHEN oim.meta_key = 'application_type' THEN oim.meta_value END) AS application_type,
+//             MAX(CASE WHEN oim.meta_key = 'years' THEN oim.meta_value END) AS years,
+//             MAX(CASE WHEN oim.meta_key = 'start_year' THEN oim.meta_value END) AS start_year,
+//             MAX(CASE WHEN oim.meta_key = 'period' THEN oim.meta_value END) AS period,
+//             MAX(CASE WHEN oim.meta_key = 'user_membership_id' THEN oim.meta_value END) AS user_membership_id
+//          FROM {$wpdb->prefix}woocommerce_order_items oi
+//          INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim ON oim.order_item_id = oi.order_item_id
+//          WHERE oi.order_item_type = 'line_item'
+//          GROUP BY oi.order_item_id
+//          HAVING membership_plan_id IS NOT NULL AND membership_plan_id != ''"
+//     );
+
+//     // Renewal order items store the membership id they belong to directly, so
+//     // index those by membership id for an exact match.
+//     $by_membership_id = array();
+//     // 'new' application order items don't reference a membership id yet
+//     // (it doesn't exist at add-to-cart time), so index those by plan id and
+//     // match them to a membership by customer further down.
+//     $by_plan_new = array();
+
+//     foreach ( $item_rows as $row ) {
+//         $umid = (int) $row->user_membership_id;
+//         if ( $umid > 0 ) {
+//             $by_membership_id[ $umid ][] = $row;
+//         }
+//         if ( $row->application_type === 'new' ) {
+//             $by_plan_new[ (int) $row->membership_plan_id ][] = $row;
+//         }
+//     }
+
+//     // Batch-load order status + customer id for every referenced order in a
+//     // single query against the HPOS orders table (this site has custom order
+//     // tables enabled with sync to wp_posts disabled, so wc_orders is the only
+//     // reliable source). Avoiding a per-order wc_get_order() call here matters:
+//     // with ~1,400 membership order items, instantiating a full WC_Order object
+//     // (which itself loads all line items/meta) for every single one exhausted
+//     // PHP's memory limit during testing.
+//     $referenced_order_ids = array();
+//     foreach ( $item_rows as $row ) {
+//         $referenced_order_ids[ (int) $row->order_id ] = true;
+//     }
+//     $referenced_order_ids = array_keys( $referenced_order_ids );
+
+//     $order_info = array();
+//     if ( ! empty( $referenced_order_ids ) ) {
+//         $placeholders = implode( ',', array_fill( 0, count( $referenced_order_ids ), '%d' ) );
+//         $order_results = $wpdb->get_results( $wpdb->prepare(
+//             "SELECT id, status, customer_id FROM {$wpdb->prefix}wc_orders WHERE id IN ({$placeholders})",
+//             $referenced_order_ids
+//         ) );
+//         foreach ( $order_results as $order_result ) {
+//             // HPOS stores status without the legacy 'wc-' prefix.
+//             $order_info[ (int) $order_result->id ] = array(
+//                 'status'      => str_replace( 'wc-', '', $order_result->status ),
+//                 'customer_id' => (int) $order_result->customer_id,
+//             );
+//         }
+//     }
+
+//     $data = array();
+
+//     foreach ( $memberships as $membership ) {
+
+//         $membership_id = (int) $membership->ID;
+//         $user_id       = (int) $membership->post_author;
+//         $plan_id       = (int) $membership->post_parent;
+//         $status        = str_replace( 'wcm-', '', $membership->post_status );
+//         $stored_end    = get_post_meta( $membership_id, '_end_date', true );
+
+//         $matched_item = null;
+
+//         // 1) Prefer the most recent COMPLETED order item that explicitly
+//         //    points back to this membership (a renewal). Only orders that
+//         //    actually reached "completed" trigger our membership code
+//         //    (set_default_membership_status_to_pause() only fires on that
+//         //    transition), so a cancelled/pending duplicate attempt must not
+//         //    be picked as the source of truth over the real completed order.
+//         $fallback_item = null;
+//         if ( ! empty( $by_membership_id[ $membership_id ] ) ) {
+//             $candidates = $by_membership_id[ $membership_id ];
+//             usort( $candidates, function ( $a, $b ) {
+//                 return $b->order_item_id - $a->order_item_id;
+//             } );
+//             foreach ( $candidates as $candidate ) {
+//                 $order_id     = (int) $candidate->order_id;
+//                 $order_status = isset( $order_info[ $order_id ] ) ? $order_info[ $order_id ]['status'] : '';
+//                 if ( null === $fallback_item ) {
+//                     $fallback_item = $candidate; // keep the most recent as a fallback regardless of status
+//                 }
+//                 if ( 'completed' === $order_status ) {
+//                     $matched_item = $candidate;
+//                     break;
+//                 }
+//             }
+//         }
+
+//         // 2) Otherwise, fall back to the 'new' application order item for this
+//         //    plan, matched by the order's customer. A user can have multiple
+//         //    "new" application orders on record for the same plan (e.g. an
+//         //    earlier membership that lapsed and was later re-applied for as
+//         //    "new" again, rather than "renew"), so - same as step 1 - sort by
+//         //    order_item_id descending first and require a completed order
+//         //    status, so the most recent completed order wins instead of
+//         //    whichever happened to come first in the SQL result set.
+//         if ( ! $matched_item && ! empty( $by_plan_new[ $plan_id ] ) ) {
+//             $customer_candidates = array();
+//             foreach ( $by_plan_new[ $plan_id ] as $candidate ) {
+//                 $order_id    = (int) $candidate->order_id;
+//                 $customer_id = isset( $order_info[ $order_id ] ) ? $order_info[ $order_id ]['customer_id'] : 0;
+//                 if ( $customer_id === $user_id ) {
+//                     $customer_candidates[] = $candidate;
+//                 }
+//             }
+//             usort( $customer_candidates, function ( $a, $b ) {
+//                 return $b->order_item_id - $a->order_item_id;
+//             } );
+//             foreach ( $customer_candidates as $candidate ) {
+//                 $order_id     = (int) $candidate->order_id;
+//                 $order_status = isset( $order_info[ $order_id ] ) ? $order_info[ $order_id ]['status'] : '';
+//                 if ( null === $fallback_item ) {
+//                     $fallback_item = $candidate;
+//                 }
+//                 if ( 'completed' === $order_status ) {
+//                     $matched_item = $candidate;
+//                     break;
+//                 }
+//             }
+//         }
+
+//         // No completed order found, but a non-completed candidate exists
+//         // (e.g. only a cancelled duplicate attempt on record) - use it as a
+//         // best-effort fallback but flag it via the notes below.
+//         $matched_from_fallback_only = false;
+//         if ( ! $matched_item && $fallback_item ) {
+//             $matched_item               = $fallback_item;
+//             $matched_from_fallback_only = true;
+//         }
+
+//         $matched_order_id     = '';
+//         $matched_order_status = '';
+//         $application_type     = '';
+//         $start_year           = '';
+//         $years                = '';
+//         $true_start_date      = '';
+//         $true_end_date        = '';
+
+//         if ( $matched_item ) {
+//             $matched_order_id     = (int) $matched_item->order_id;
+//             $matched_order_status = isset( $order_info[ $matched_order_id ] ) ? $order_info[ $matched_order_id ]['status'] : '';
+//             $application_type     = $matched_item->application_type;
+//             $start_year           = $matched_item->start_year;
+//             $years                = $matched_item->years;
+
+//             // Prefer parsing the true start/end dates from the order item's
+//             // own "period" meta ("YYYY-MM-DD to YYYY-MM-DD"), since it is
+//             // present on every membership order item, unlike start_year/
+//             // end_year whose key naming has changed across different code
+//             // revisions (older renewal orders store "end_year" instead of
+//             // "start_year", which would otherwise silently break this
+//             // calculation for those rows).
+//             if ( ! empty( $matched_item->period ) && preg_match( '/^(\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})$/', $matched_item->period, $period_matches ) ) {
+//                 $true_start_date = $period_matches[1];
+//                 $true_end_date   = $period_matches[2];
+//             } elseif ( $start_year && $years ) {
+//                 // Fallback for the rare case "period" itself is missing.
+//                 // Same calculation as set_default_membership_status_to_pause().
+//                 $true_start_date = date( 'Y-05-01', strtotime( $start_year . '-01-01' ) );
+//                 $true_end_date   = date( 'Y-m-d', strtotime( '+ ' . $years . ' years', strtotime( $true_start_date ) ) );
+//             }
+//         }
+
+//         // Look up the pending expiry action for this membership.
+//         //
+//         // IMPORTANT: prefer an actually-pending action over "most recent
+//         // scheduled_date_gmt". WooCommerce Memberships' schedule_expiration_events()
+//         // always cancels the previous action before creating a new one, so at
+//         // most one 'pending' action should exist per membership at a time -
+//         // that is always the authoritative/current one. Canceled actions are
+//         // leftovers from earlier (possibly wrong) schedules and their
+//         // scheduled_date_gmt can be LATER than the correct pending one's date
+//         // (e.g. a stale 1-year-default schedule dated 2027-06-01 vs. a correct
+//         // renewal schedule dated 2027-04-30) - sorting by date alone would
+//         // wrongly surface the canceled/stale action instead of the real one.
+//         $args_json = wp_json_encode( array( 'user_membership_id' => $membership_id ) );
+//         $action    = $wpdb->get_row( $wpdb->prepare(
+//             "SELECT action_id, status, scheduled_date_gmt
+//              FROM {$wpdb->prefix}actionscheduler_actions
+//              WHERE hook = 'wc_memberships_user_membership_expiry'
+//                AND args = %s
+//              ORDER BY (status = 'pending') DESC, action_id DESC
+//              LIMIT 1",
+//             $args_json
+//         ) );
+
+//         $scheduled_action_id     = $action ? $action->action_id : '';
+//         $scheduled_action_status = $action ? $action->status : '';
+//         $scheduled_expiry_date   = $action ? $action->scheduled_date_gmt : '';
+
+//         // For already-expired memberships, find when the status actually
+//         // flipped to "expired" from the membership's own activity log (author
+//         // included), since _end_date gets overwritten to "now" at the moment
+//         // of expiry and can no longer be trusted as "the purchased end date".
+//         $actual_expired_date = '';
+//         $actual_expired_by   = '';
+//         if ( 'expired' === $status ) {
+//             $comment = $wpdb->get_row( $wpdb->prepare(
+//                 "SELECT comment_date_gmt, comment_author
+//                  FROM {$wpdb->comments}
+//                  WHERE comment_post_ID = %d
+//                    AND comment_type = 'user_membership_note'
+//                    AND comment_content LIKE %s
+//                  ORDER BY comment_ID DESC
+//                  LIMIT 1",
+//                 $membership_id,
+//                 '%to Expired%'
+//             ) );
+//             $actual_expired_date = $comment ? $comment->comment_date_gmt : $stored_end;
+//             $actual_expired_by   = $comment ? $comment->comment_author : '';
+//         }
+
+//         // Does a NEWER membership post exist for this same user (any status,
+//         // any plan)? If so, this expired record was superseded by a later
+//         // application/renewal - expire_user_other_membership() deliberately
+//         // expires the old membership whenever a new one is created for the
+//         // same user, which is correct, intended behaviour, not a bug. Fixing
+//         // remediation only needs to look at the user's LATEST membership
+//         // record, so an older expired one with a newer sibling should never
+//         // be flagged, regardless of who/what expired it or when.
+//         $is_superseded_by_newer_membership = false;
+//         if ( 'expired' === $status && ! empty( $membership_posts_by_user[ $user_id ] ) ) {
+//             foreach ( $membership_posts_by_user[ $user_id ] as $sibling ) {
+//                 if ( (int) $sibling->ID !== $membership_id && $sibling->post_date_gmt > $membership->post_date_gmt ) {
+//                     $is_superseded_by_newer_membership = true;
+//                     break;
+//                 }
+//             }
+//         }
+
+//         // Was this expired manually by an administrator rather than by the
+//         // automated scheduler? WooCommerce Memberships logs a "status changed
+//         // ... to Expired" note every time a membership expires, regardless of
+//         // the trigger (admin edit screen, our own code, or the Action
+//         // Scheduler cron task) - but the comment_author differs: automated/
+//         // system-triggered transitions (Action Scheduler cron, or our own
+//         // expire_user_other_membership()) log the author as "WooCommerce",
+//         // while a human using the wp-admin edit screen logs their own WP
+//         // display name. A real admin name here means this was a deliberate,
+//         // intentional action - not the scheduling bug we are hunting for.
+//         $is_manually_expired_by_admin = (
+//             'expired' === $status
+//             && ! empty( $actual_expired_by )
+//             && 0 !== strcasecmp( $actual_expired_by, 'WooCommerce' )
+//         );
+
+//         // member_number is a user meta this plugin auto-generates/updates on
+//         // every new/renew membership run (see set_default_membership_status_to_pause()
+//         // in membership-function.php), formatted as "initials-hkid~startYY-endYY"
+//         // (or "initials-hkid~L-startYY-endYY" for LIFE membership plans). It
+//         // is an independent, secondary record of the intended membership term
+//         // that we can cross-check computed_true_start_date/computed_true_end_date
+//         // against - note the separator before startYY is "~" (or "~L-" for
+//         // LIFE plans), not "-", so only a single literal dash actually
+//         // appears in the string: the one between startYY and endYY. A regex
+//         // anchored to the end of the string on just that single dash reliably
+//         // extracts both years regardless of the optional "~L" marker.
+//         $member_number            = get_user_meta( $user_id, 'member_number', true );
+//         $member_number_start_year = null; // 2-digit int, or null if unparsable
+//         $member_number_end_year   = null; // 2-digit int, or null if unparsable
+//         if ( ! empty( $member_number ) && preg_match( '/(\d{2})-(\d{2})$/', $member_number, $mn_matches ) ) {
+//             $member_number_start_year = (int) $mn_matches[1];
+//             $member_number_end_year   = (int) $mn_matches[2];
+//         }
+
+//         // Small helper: get the 2-digit year (as int) from a "Y-m-d..." date
+//         // string, or null if the date is empty/unparsable. Used to compare
+//         // full dates against member_number's 2-digit year fields.
+//         $get_2digit_year = function ( $date_string ) {
+//             if ( empty( $date_string ) ) {
+//                 return null;
+//             }
+//             $timestamp = strtotime( $date_string );
+//             return $timestamp ? (int) date( 'y', $timestamp ) : null;
+//         };
+
+//         // Categorise the row so affected memberships can be filtered quickly.
+//         $category = 'OK';
+//         $notes    = '';
+
+//         if ( 'expired' === $status && $is_superseded_by_newer_membership ) {
+//             $category = 'OK_SUPERSEDED';
+//             $notes    = 'This membership was correctly expired because a newer membership record exists for the same user (re-application/renewal superseded it) - not the scheduler bug.';
+//         } elseif ( 'expired' === $status && $is_manually_expired_by_admin ) {
+//             $category = 'OK_MANUALLY_EXPIRED';
+//             $notes    = "Membership was manually expired by an administrator ({$actual_expired_by}), not by the automated scheduler.";
+//         } elseif ( $matched_item ) {
+//             // --- Has a matched (completed) order: strict three-part OK check ---
+//             // 1. stored_end_date (date only) must match computed_true_end_date,
+//             //    AND (for statuses that should carry a live schedule) must also
+//             //    match the currently scheduled Action Scheduler expiry date.
+//             // 2. computed_true_start_date's year must match member_number's
+//             //    start year segment.
+//             // 3. computed_true_end_date's year must match member_number's end
+//             //    year segment.
+//             $stored_end_date_only = $stored_end ? substr( $stored_end, 0, 10 ) : '';
+
+//             $end_date_matches_true = (
+//                 $stored_end_date_only && $true_end_date
+//                 && $stored_end_date_only === $true_end_date
+//             );
+
+//             $requires_live_schedule = in_array( $status, array( 'active', 'paused', 'delayed' ), true );
+//             $end_date_matches_schedule = (
+//                 ! $requires_live_schedule // not applicable to already-expired memberships
+//                 || ( $scheduled_expiry_date && $true_end_date && substr( $scheduled_expiry_date, 0, 10 ) === $true_end_date )
+//             );
+
+//             $true_start_year_2 = $get_2digit_year( $true_start_date );
+//             $true_end_year_2   = $get_2digit_year( $true_end_date );
+
+//             $start_year_matches_member_number = (
+//                 null !== $member_number_start_year && null !== $true_start_year_2
+//                 && $member_number_start_year === $true_start_year_2
+//             );
+//             $end_year_matches_member_number = (
+//                 null !== $member_number_end_year && null !== $true_end_year_2
+//                 && $member_number_end_year === $true_end_year_2
+//             );
+
+//             if ( $requires_live_schedule && ! $scheduled_expiry_date ) {
+//                 $category = 'A_NO_SCHEDULED_EXPIRY';
+//                 $notes    = 'No pending expiry action found in Action Scheduler for a currently active/paused/delayed membership.';
+//             } elseif ( $requires_live_schedule && ( ! $end_date_matches_true || ! $end_date_matches_schedule ) ) {
+//                 $category = 'A_SCHEDULE_MISMATCH';
+//                 $notes    = 'Stored end date and/or scheduled expiry date does not match the purchased term - this membership will expire early unless corrected.';
+//             } elseif ( 'expired' === $status ) {
+//                 // Already-expired memberships with a matched order and no
+//                 // superseding/manual explanation: check separately from the
+//                 // active/paused/delayed schedule check above so a genuinely
+//                 // "expired too early" membership is labelled B_WRONGLY_EXPIRED
+//                 // (matching the earlier investigation's terminology) rather
+//                 // than the more generic A_SCHEDULE_MISMATCH, which no longer
+//                 // applies once a membership has actually expired (there is no
+//                 // live "schedule" left to be wrong about).
+//                 //
+//                 // IMPORTANT: do NOT use end_date_matches_true (exact-date
+//                 // stored_end vs true_end comparison) here. Once a membership
+//                 // expires, expire_membership() always overwrites _end_date to
+//                 // "now" (the moment the cron/scheduler fired), which will
+//                 // essentially never exactly equal the order's true_end_date -
+//                 // even for a membership that expired correctly, right on
+//                 // schedule. The only reliable "expired too early" signal is
+//                 // comparing true_end_date against actual_expired_date (the
+//                 // logged status-change timestamp): if the true end date is
+//                 // still in the future relative to when it actually expired,
+//                 // it expired early - that is the real bug signature.
+//                 if ( $true_end_date && $actual_expired_date && $true_end_date > substr( $actual_expired_date, 0, 10 ) ) {
+//                     $category = 'B_WRONGLY_EXPIRED';
+//                     $notes    = 'Membership expired before its purchased term ended, with no newer membership and no named admin responsible - likely wrongly auto-expired by the stale scheduling bug.';
+//                     if ( empty( $actual_expired_by ) ) {
+//                         $notes .= ' (No "to Expired" note found - this membership was likely expired via an older code path that bypassed logging; verify manually.)';
+//                     }
+//                 } elseif ( ! $start_year_matches_member_number || ! $end_year_matches_member_number ) {
+//                     $category = 'A_MEMBER_NUMBER_MISMATCH';
+//                     $notes    = 'The purchased term (from the linked order) does not match the start/end year encoded in this user\'s member_number.';
+//                 } else {
+//                     $category = 'OK_EXPIRED_CORRECTLY';
+//                 }
+//             } elseif ( ! $start_year_matches_member_number || ! $end_year_matches_member_number ) {
+//                 $category = 'A_MEMBER_NUMBER_MISMATCH';
+//                 $notes    = 'The purchased term (from the linked order) does not match the start/end year encoded in this user\'s member_number.';
+//             } else {
+//                 $category = 'OK';
+//             }
+//         } else {
+//             // --- No matched order: fall back to member_number cross-checks ---
+//             if ( in_array( $status, array( 'active', 'paused', 'delayed' ), true ) ) {
+//                 // This row IS the user's current active/paused/delayed
+//                 // membership - compare its own stored end date against
+//                 // member_number's end year.
+//                 $stored_end_year_2 = $get_2digit_year( $stored_end );
+//                 if ( null !== $member_number_end_year && null !== $stored_end_year_2 && $member_number_end_year === $stored_end_year_2 ) {
+//                     $category = 'OK_NO_ORDER_LINKED';
+//                     $notes    = 'No order found to verify against, but the stored end date matches the end year encoded in member_number.';
+//                 } else {
+//                     $category = 'NO_ORDER_MATCH';
+//                     $notes    = 'Could not find a matching order item to verify the intended end date, and the stored end date does not match member_number\'s end year - review manually.';
+//                 }
+//             } elseif ( 'expired' === $status ) {
+//                 // Does this user currently hold ANY active/paused/delayed
+//                 // membership at all (regardless of date)? If so, this old
+//                 // expired record with no order is not a priority concern.
+//                 $user_has_active_membership = false;
+//                 if ( ! empty( $membership_posts_by_user[ $user_id ] ) ) {
+//                     foreach ( $membership_posts_by_user[ $user_id ] as $sibling ) {
+//                         if ( in_array( $sibling->post_status, array( 'wcm-active', 'wcm-paused', 'wcm-delayed' ), true ) ) {
+//                             $user_has_active_membership = true;
+//                             break;
+//                         }
+//                     }
+//                 }
+
+//                 if ( ! $user_has_active_membership && null !== $member_number_end_year && $member_number_end_year >= 27 ) {
+//                     // member_number says this user's membership should still
+//                     // run through 2027 or later, yet they have no order to
+//                     // verify against AND no currently active membership at
+//                     // all - a strong signal of a wrongly-expired membership
+//                     // that this audit cannot otherwise confirm via an order.
+//                     $category = 'B_WRONGLY_EXPIRED_NO_ORDER';
+//                     $notes    = "No order found to verify against, but member_number ({$member_number}) implies this membership should still run through 20{$member_number_end_year}, and the user currently has no active membership - likely wrongly expired.";
+//                 } else {
+//                     $category = 'NO_ORDER_MATCH';
+//                     $notes    = 'Could not find a matching order item to verify the intended end date. Likely a manually created/admin-assigned membership - review manually.';
+//                 }
+//             }
+//         }
+
+//         if ( $matched_from_fallback_only ) {
+//             $notes .= ( $notes ? ' ' : '' ) . 'Note: no completed order was found for this membership - the matched order above is a non-completed fallback (e.g. cancelled duplicate attempt), verify manually.';
+//         }
+
+//         $user = get_userdata( $user_id );
+//         $plan = function_exists( 'wc_memberships_get_membership_plan' ) ? wc_memberships_get_membership_plan( $plan_id ) : null;
+
+//         $data[] = array(
+//             'membership_id'             => $membership_id,
+//             'user_id'                   => $user_id,
+//             'user_email'                => $user ? $user->user_email : '',
+//             'plan_id'                   => $plan_id,
+//             'plan_name'                 => $plan ? $plan->get_name() : '',
+//             'status'                    => $status,
+//             'stored_end_date'           => $stored_end,
+//             'matched_order_id'          => $matched_order_id,
+//             'matched_order_status'      => $matched_order_status,
+//             'application_type'          => $application_type,
+//             'start_year'                => $start_year,
+//             'years'                     => $years,
+//             'computed_true_start_date'  => $true_start_date,
+//             'computed_true_end_date'    => $true_end_date,
+//             'member_number'             => $member_number,
+//             'scheduled_action_id'       => $scheduled_action_id,
+//             'scheduled_action_status'   => $scheduled_action_status,
+//             'scheduled_expiry_date_gmt' => $scheduled_expiry_date,
+//             'actual_expired_date'       => $actual_expired_date,
+//             'actual_expired_by'         => $actual_expired_by,
+//             'category'                  => $category,
+//             'notes'                    => $notes,
+//         );
+//     }
+
+//     return $data;
+// }
+
+// Converts the audit data into CSV-ordered rows for the export.
+// function get_membership_expiry_audit_rows() {
+
+//     $columns = array(
+//         'membership_id',
+//         'user_id',
+//         'user_email',
+//         'plan_id',
+//         'plan_name',
+//         'status',
+//         'stored_end_date',
+//         'matched_order_id',
+//         'matched_order_status',
+//         'application_type',
+//         'start_year',
+//         'years',
+//         'computed_true_start_date',
+//         'computed_true_end_date',
+//         'member_number',
+//         'scheduled_action_id',
+//         'scheduled_action_status',
+//         'scheduled_expiry_date_gmt',
+//         'actual_expired_date',
+//         'actual_expired_by',
+//         'category',
+//         'notes',
+//     );
+
+//     $rows = array();
+
+//     foreach ( get_membership_expiry_audit_data() as $data_row ) {
+//         $row = array();
+//         foreach ( $columns as $column ) {
+//             $row[] = $data_row[ $column ];
+//         }
+//         $rows[] = $row;
+//     }
+
+//     return $rows;
+// }
+// --- END TEMP DEBUG ---
+
+// --- TEMP DEBUG (Problem B, Stage 1 remediation): schedule expiry events for
+// manually-imported ACTIVE memberships ---
+// These are memberships created directly in the database during the initial
+// data migration (no order was ever placed through this site for them), so
+// they have no order item to verify against, and - since they predate the
+// order-driven creation flow entirely - never had schedule_expiration_events()
+// called for them at all. Their stored _end_date is the only trustworthy
+// source of the correct end date, so we use it directly to (re)schedule the
+// Action Scheduler expiry events via WooCommerce Memberships' own method,
+// exactly as a normal creation/renewal would.
+// add_shortcode( 'membership_fix', 'run_membership_expiry_schedule_fix' );
+// function run_membership_expiry_schedule_fix() {
+
+//     if ( ! current_user_can( 'administrator' ) ) {
+//         return '<p>Unauthorized.</p>';
+//     }
+
+//     $targets = array();
+
+//     foreach ( get_membership_expiry_audit_data() as $data_row ) {
+
+//         // Only touch ACTIVE memberships that have no matching order AND no
+//         // scheduled expiry action at all - i.e. legacy manually-imported
+//         // memberships, not memberships affected by the schedule-mismatch bug
+//         // (those already have an order to recompute the correct date from and
+//         // are handled separately).
+//         if (
+//             'active' === $data_row['status']
+//             && '' === $data_row['matched_order_id']
+//             && '' === $data_row['scheduled_action_id']
+//             && ! empty( $data_row['stored_end_date'] )
+//         ) {
+//             $targets[] = $data_row;
+//         }
+//     }
+
+//     $results = array();
+
+//     foreach ( $targets as $target ) {
+
+//         $membership_id = $target['membership_id'];
+//         $user_membership = wc_memberships_get_user_membership( $membership_id );
+
+//         if ( ! $user_membership ) {
+//             $results[] = "#{$membership_id}: SKIPPED (membership object not found)";
+//             continue;
+//         }
+
+//         // The stored _end_date is kept in UTC (matches scheduled_date_gmt
+//         // elsewhere in this audit), so parse it explicitly as UTC rather than
+//         // relying on the server's default timezone.
+//         $end_datetime = new DateTime( $target['stored_end_date'], new DateTimeZone( 'UTC' ) );
+//         $end_timestamp = $end_datetime->getTimestamp();
+
+//         $user_membership->schedule_expiration_events( $end_timestamp );
+
+//         $results[] = "#{$membership_id} (user #{$target['user_id']}, {$target['user_email']}): scheduled expiry for {$target['stored_end_date']} UTC";
+//     }
+
+//     $output  = '<p>Checked ' . count( $targets ) . ' active membership(s) with no order match and no scheduled expiry action.</p>';
+//     $output .= '<pre>' . esc_html( implode( "\n", $results ) ) . '</pre>';
+
+//     // --- Second remediation pass: A_SCHEDULE_MISMATCH ---
+//     // These are ACTIVE or PAUSED memberships that DO have a matching
+//     // (completed) order, and therefore a reliable computed_true_end_date, but
+//     // whose Action Scheduler expiry task does not match it - the core bug this
+//     // whole investigation started from (stale schedule left over from the
+//     // plan's own default access length). Unlike the block above, we don't
+//     // touch _end_date here: it was already being set correctly by the order
+//     // flow, only the schedule itself was never updated to match, so we only
+//     // need to reschedule using the membership's own stored_end_date - not by
+//     // reconstructing a date from computed_true_end_date (see note below).
+//     //
+//     // PAUSED memberships are included here even though WooCommerce
+//     // Memberships' own design normally removes the scheduled expiry action
+//     // entirely while paused (see the 'paused' case in
+//     // WC_Memberships_User_Memberships::transition_post_status(), which calls
+//     // unschedule_expiration_events()). In practice we found paused memberships
+//     // on this site still carrying a *pending* action left over from the
+//     // plan's own 1-year default (schedule_expiration_events() never got
+//     // properly superseded/cleared for them) - so simply leaving them alone is
+//     // not safe: if that stale action is ever allowed to fire, it would still
+//     // incorrectly flip the membership to "expired" while the user is still
+//     // paused/awaiting approval. Correcting it to the true end date removes
+//     // that risk and gives any future admin approval flow (which calls
+//     // schedule_expiration_events(get_end_date()) again on reactivation) a
+//     // correct baseline to work from either way.
+//     $mismatch_targets = array();
+
+//     foreach ( get_membership_expiry_audit_data() as $data_row ) {
+//         if (
+//             'A_SCHEDULE_MISMATCH' === $data_row['category']
+//             && in_array( $data_row['status'], array( 'active', 'paused' ), true )
+//             && ! empty( $data_row['matched_order_id'] )
+//             && ! empty( $data_row['stored_end_date'] )
+//         ) {
+//             $mismatch_targets[] = $data_row;
+//         }
+//     }
+
+//     $mismatch_results = array();
+
+//     foreach ( $mismatch_targets as $target ) {
+
+//         $membership_id   = $target['membership_id'];
+//         $user_membership = wc_memberships_get_user_membership( $membership_id );
+
+//         if ( ! $user_membership ) {
+//             $mismatch_results[] = "#{$membership_id}: SKIPPED (membership object not found)";
+//             continue;
+//         }
+
+//         // Use stored_end_date (the membership's own _end_date meta), parsed as
+//         // UTC - the same convention used everywhere else in this codebase and
+//         // matched by scheduled_date_gmt. This plan is not a "fixed access
+//         // length" plan, so WooCommerce Memberships' own set_end_date() never
+//         // applies a local-midnight conversion to it either; membership-function.php
+//         // writes _end_date as a literal "YYYY-04-30 16:00:00" string with no
+//         // timezone math involved. Reconstructing the date from
+//         // computed_true_end_date (a date-only string, e.g. "2029-04-30") and
+//         // parsing it with the site's local timezone (as an earlier version of
+//         // this code did) shifts it back by a full day once converted to UTC
+//         // (Asia/Hong_Kong is UTC+8), producing a schedule one day earlier than
+//         // the membership's actual correct end date. stored_end_date is already
+//         // confirmed correct for every A_SCHEDULE_MISMATCH row, so use it
+//         // directly instead.
+//         $end_datetime  = new DateTime( $target['stored_end_date'], new DateTimeZone( 'UTC' ) );
+//         $end_timestamp = $end_datetime->getTimestamp();
+
+//         $user_membership->schedule_expiration_events( $end_timestamp );
+
+//         $mismatch_results[] = "#{$membership_id} (user #{$target['user_id']}, {$target['user_email']}, status: {$target['status']}): rescheduled expiry to {$target['stored_end_date']} UTC (was {$target['scheduled_expiry_date_gmt']} GMT)";
+//     }
+
+//     $output .= '<p>Checked ' . count( $mismatch_targets ) . ' active/paused membership(s) with a completed order but a mismatched expiry schedule.</p>';
+//     $output .= '<pre>' . esc_html( implode( "\n", $mismatch_results ) ) . '</pre>';
+
+//     // --- Third remediation pass: A_NO_SCHEDULED_EXPIRY with a matched order ---
+//     // These are ACTIVE memberships that DO have a matching (completed) order -
+//     // so their stored_end_date is trustworthy - but have NO expiry action
+//     // scheduled at all (neither pending nor even a stale canceled one). This is
+//     // distinct from both passes above: pass 1 only handles memberships with NO
+//     // order at all, and pass 2 only handles memberships that already have a
+//     // (wrong) schedule to correct. This pass covers the remaining gap: order
+//     // exists, but schedule_expiration_events() was seemingly never called for
+//     // this membership at all.
+//     $no_schedule_with_order_targets = array();
+
+//     foreach ( get_membership_expiry_audit_data() as $data_row ) {
+//         if (
+//             'A_NO_SCHEDULED_EXPIRY' === $data_row['category']
+//             && 'active' === $data_row['status']
+//             && ! empty( $data_row['matched_order_id'] )
+//             && ! empty( $data_row['stored_end_date'] )
+//         ) {
+//             $no_schedule_with_order_targets[] = $data_row;
+//         }
+//     }
+
+//     $no_schedule_with_order_results = array();
+
+//     foreach ( $no_schedule_with_order_targets as $target ) {
+
+//         $membership_id   = $target['membership_id'];
+//         $user_membership = wc_memberships_get_user_membership( $membership_id );
+
+//         if ( ! $user_membership ) {
+//             $no_schedule_with_order_results[] = "#{$membership_id}: SKIPPED (membership object not found)";
+//             continue;
+//         }
+
+//         // Same UTC parsing convention as passes 1 and 2 above - stored_end_date
+//         // is a literal "YYYY-04-30 16:00:00" UTC string with no timezone math.
+//         $end_datetime  = new DateTime( $target['stored_end_date'], new DateTimeZone( 'UTC' ) );
+//         $end_timestamp = $end_datetime->getTimestamp();
+
+//         $user_membership->schedule_expiration_events( $end_timestamp );
+
+//         $no_schedule_with_order_results[] = "#{$membership_id} (user #{$target['user_id']}, {$target['user_email']}): scheduled expiry for {$target['stored_end_date']} UTC (order #{$target['matched_order_id']}, had no schedule at all)";
+//     }
+
+//     $output .= '<p>Checked ' . count( $no_schedule_with_order_targets ) . ' active membership(s) with a completed order but no scheduled expiry action at all.</p>';
+//     $output .= '<pre>' . esc_html( implode( "\n", $no_schedule_with_order_results ) ) . '</pre>';
+
+//     return $output;
+// }
+// --- END TEMP DEBUG ---
 
 add_shortcode('login-button-message', 'login_button_message');
 
@@ -2623,7 +3335,9 @@ function display_membership_profile(){
                 echo ucfirst( $status ) ;
                 switch( $status ){
                   case 'active':
-                    echo "<a href='".home_url('/membership-card/')."'>Download e-membership card</a>";
+                    // Use a fresh URL so previously cached cards are not reused.
+                    $card_url = add_query_arg( 'v', wp_generate_uuid4(), home_url( '/membership-card/' ) );
+                    echo "<a href='" . esc_url( $card_url ) . "'>Download e-membership card</a>";
                     break;
                   default:
                     echo "<a href='".home_url('/member-registration/')."'>Renew membership</a>";
@@ -2648,6 +3362,10 @@ function display_membership_profile(){
 add_action('template_redirect', 'display_membership_card');
 function display_membership_card() {
     if ( is_page('membership-card') ) {
+        // Membership cards contain personal data and must not be cached.
+        nocache_headers();
+        header( 'Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0' );
+
         $user_id = get_current_user_id();
         $args = array(
             'status' => array('active')
@@ -2683,13 +3401,18 @@ function display_membership_card() {
 
         $html_content = ob_get_clean();
 
+        $filename = sanitize_file_name( $args['membership_number'] );
+        if ( '' === $filename ) {
+            $filename = 'membership-card';
+        }
+
         $dompdf->loadHtml($html_content);
 
         $dompdf->setPaper('A4', 'portrait');
 
         $dompdf->render();
 
-        $dompdf->stream("certificate-preview", array("Attachment" => 0));
+        $dompdf->stream( $filename . '.pdf', array( 'Attachment' => 0 ) );
 
         exit;
 
