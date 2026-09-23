@@ -302,6 +302,10 @@ if ( file_exists( $_chinese_font_path ) ) {
             <span class="info-type purple">Course Fee: </span><br>
             <?php
 
+            $format_poster_fee = static function ( $fee ) {
+              return (float) $fee === 0.0 ? 'Free' : 'HKD ' . $fee;
+            };
+
             if( $course->is_early_bird ):
 
               ?>
@@ -322,14 +326,14 @@ if ( file_exists( $_chinese_font_path ) ) {
                   </tr>
                   <tr>
                     <td >HKOTA members</td>
-                    <td class="text-center"><?php echo "HKD " . $course->fee_member_earlybird ;?></td>
-                    <td class="text-center"><?php echo "HKD " . $course->fee_member ;?></td>
+                    <td class="text-center"><?php echo esc_html( $format_poster_fee( $course->fee_member_earlybird ) ); ?></td>
+                    <td class="text-center"><?php echo esc_html( $format_poster_fee( $course->fee_member ) ); ?></td>
                   </tr>
                   <?php if( !( $course->is_restricted && $course->is_member_only ) ): ?>
                     <tr>
                       <td >Non-HKOTA members</td>
-                      <td class="text-center"><?php echo "HKD " . $course->fee_non_member_earlybird ;?></td>
-                      <td class="text-center"><?php echo "HKD " . $course->fee_non_member ;?></td>
+                      <td class="text-center"><?php echo esc_html( $format_poster_fee( $course->fee_non_member_earlybird ) ); ?></td>
+                      <td class="text-center"><?php echo esc_html( $format_poster_fee( $course->fee_non_member ) ); ?></td>
                     </tr>
                   <?php endif; ?>
                 </table>
@@ -346,12 +350,12 @@ if ( file_exists( $_chinese_font_path ) ) {
                 <table class="regular-table fee">
                   <tr>
                     <td style="width:50%">HKOTA members</td>
-                    <td style="width:50%" class="text-center"><?php echo "HKD " . $course->fee_member ;?></td>
+                    <td style="width:50%" class="text-center"><?php echo esc_html( $format_poster_fee( $course->fee_member ) ); ?></td>
                   </tr>
                   <?php if( !( $course->is_restricted && $course->is_member_only ) ): ?>
                     <tr>
                       <td>Non-HKOTA members</td>
-                      <td class="text-center"><?php echo "HKD " . $course->fee_non_member ;?></td>
+                      <td class="text-center"><?php echo esc_html( $format_poster_fee( $course->fee_non_member ) ); ?></td>
                     </tr>
                   <?php endif; ?>
 
