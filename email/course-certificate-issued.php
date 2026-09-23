@@ -37,7 +37,7 @@ $cpd_record = get_user_cpd_record_by('course_id', $args );
         <p>You can download your certificate using the link below:</p>
         <p><a class="ical" href="<?php echo COURSE_CERTIFICATE_URL .$cpd_record->file ;?>">View</a></p>
         <p>Additionally, your updated CPD record is available for your review:</p>
-        <a style="color:#008080;" href="<?php echo home_url('/my-account/cpd') ;?>">View CPD Record</a>
+        <a style="color:#008080;" href="<?php echo home_url('/my-account/cpd-records/') ;?>">View CPD Record</a>
         <p>If you have any questions or need further assistance, please feel free to contact <?php echo $course->contact; ?></p>
         <p>Thank you for your participation, and we look forward to seeing you again in future courses.</p>
         <p>Sincerely,<br>Hong Kong Occupational Therapy Association</p>
